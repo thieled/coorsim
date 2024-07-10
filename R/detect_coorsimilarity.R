@@ -44,22 +44,19 @@ detect_cosimilarity <- function(
   
   ### Step 1: Preprocess data
   
-  if(verbose) pbapply::pboptions(style = 1, type = "timer", char = ">")
-  
-  
   if(verbose) cli::cli_progress_step("[1/5]: Preprocessing.")
   
   data <- coorsim_prepare_data(
-    data = data,
-    vector_matrix = vector_matrix,
-    time_window = time_window,
-    post_id = post_id, 
-    account_id = account_id, 
-    time = time,
-    content = content,
-    verbose = verbose
-  )
-  
+                data = data,
+                vector_matrix = vector_matrix,
+                time_window = time_window,
+                post_id = post_id, 
+                account_id = account_id, 
+                time = time,
+                content = content,
+                verbose = verbose
+              )
+              
   # End preprocess 
   if(verbose) cli::cli_process_done()
   
@@ -70,56 +67,15 @@ detect_cosimilarity <- function(
   if(verbose){
     cli::cli_progress_step("[2/5]: Matching posts published within {time_window}s.",
                            msg_done = "[2/5]: Matched posts published within {time_window}s.")
-    overlaps <- data.table::foverlaps(data, data,
-                                      by.x = c("time", "end_time"),
-                                      by.y = c("time", "time_dup"),
-                                      mult = "all",
-                                      type="any",
-                                      nomatch=0L,
-                                      verbose = F)
+    
+    id_list <- coorsim_match_overlaps(data = data)
+    
     cli::cli_progress_done()
   }else{
-    overlaps <- data.table::foverlaps(data, data,
-                                      by.x = c("time", "end_time"),
-                                      by.y = c("time", "time_dup"),
-                                      mult = "all",
-                                      type="any",
-                                      nomatch=0L,
-                                      verbose = F)
+    
+    id_list <- coorsim_match_overlaps(data = data)
+    
   }
-  
-  # Renaming
-  data.table::setnames(overlaps, old = c("i.post_id",
-                                         "i.account_id",
-                                         "i.time"), 
-                                  new = c("post_id_y",
-                                          "account_id_y",
-                                          "time_y"))
-  
-  # Keep only neccesary cols: id, time, id_y, time_y
-  overlaps <- overlaps[, .(post_id,
-                           account_id,
-                           time,
-                           post_id_y,
-                           account_id_y,
-                           time_y)]
-  
-  # Remove diagonal pairs
-  overlaps <- overlaps[post_id != post_id_y]
-  
-  # Function to remove duplicated pairs -- (benchmarked) 
-  remove_dup_pairs <- function(dt) {
-    dt[, c("post_id", "post_id_y") := .(pmin(post_id, post_id_y), # sorts both IDs 
-                                        pmax(post_id, post_id_y))]
-    unique(dt) # drops non-unique pairs
-  }
-  
-  overlaps <- remove_dup_pairs(overlaps)
-  
-  
-  # Split overlaps in groups by post_id - using data.table functions -- (benchmarked)
-  id_list <- overlaps[, .(id_vector = list(unique(c(.BY[[1]], post_id_y)))), by = post_id]
-  id_list <- stats::setNames(id_list$id_vector, id_list$post_id)
   
   
   ### Step 3:  Query the vector matrix using Rcpp - 
@@ -135,57 +91,8 @@ detect_cosimilarity <- function(
   }
   
 
-  
   ### Step 4: Calculate the pairwise similarities
 
-  # Function to process each matrix in vec_list
-  get_pairwise_similarity <- function(m) {
-    
-    # Calculate pairwise cosine similarity
-    pairwise_sim <- proxyC::simil(x = m[1, , drop = FALSE], # Compare the first vector (i.e., the reference post)
-                                  y = m[-1, , drop = FALSE],  # to the remaining vectors (i.e., posts found within 'time_window' after post x)
-                                  margin = 1, # use rowise vectors of matrix
-                                  method = method, # default: "cosine"
-                                  use_nan = TRUE,
-                                  min_simil = min_simil, # set threshold
-                                  drop0 = TRUE,
-                                  digits = 8 # Cpp rounding
-                                  )
-    
-    # Get triplet (post x, post y, simil)
-    triplet <- Matrix::mat2triplet(pairwise_sim, uniqT = TRUE) |>
-      data.table::as.data.table()
-    
-    triplet$post_id <- rownames(pairwise_sim)[triplet$i]
-    triplet$post_id_y <- colnames(pairwise_sim)[triplet$j]
-    
-    # Subset
-    triplet <- triplet[
-      post_id != post_id_y &
-        x > 0 &
-        !is.na(x)
-    ]
-    
-    triplet[, `:=`(similarity = x)][, c("i", "j", "x") := NULL]
-    
-    return(triplet)
-  }
-  
-  
-  # # Set up the parallel plan with future.apply
-  # future::plan(future::multisession, workers = parallel::detectCores() - 1)
-  # 
-  # # Apply the function to each element of result_list in parallel
-  # pairwise_simil_list <- future.apply::future_lapply(vec_list, get_pairwise_similarity,
-  #                                        future.seed = 42,
-  #                                        future.stdout = NA,
-  #                                        future.conditions = NULL)
-  
-  
-  ### TO DO: Inspect if purrr::map or furrr::map brings any performance gain
-  
-  if(cpp){
-    
     if(verbose){
       cli::cli_progress_step("[4/5]: Get cosine similarity of n={nrow(overlaps)} pairs using C++", 
                              msg_done = "[4/5]: Got {method}cosine similarity of n={nrow(overlaps)} pairs using C++")
@@ -196,22 +103,7 @@ detect_cosimilarity <- function(
     }else{
       pairwise_simil_list <- compute_cosine_similarities(matrices_list = vec_list, threshold = min_simil)
     }
-  }else{
-
-    if(verbose){
-      cli::cli_progress_step("[4/5]: Get {method} similarity of n={nrow(overlaps)} pairs.", 
-                             msg_done = "[4/5]: Got {method} similarity for n={nrow(overlaps)} pairs.")
-      cat("\n")
-    
-        options("proxyC.threads" = threads)
-        pairwise_simil_list <- pbapply::pblapply(vec_list, get_pairwise_similarity)
-    
-      cli::cli_progress_done()
-      
-    }else{
-      pairwise_simil_list <- lapply(vec_list, get_pairwise_similarity)
-    }
-  }
+  
   
   # Bind to simil_dt 
   simil_dt <- pairwise_simil_list |>
@@ -226,12 +118,6 @@ detect_cosimilarity <- function(
   ]
   
   
-  ### Test:  Export simil_dt
-  
-  return(simil_dt)
-  
-  
-  
   
   ### Merging account data
   
@@ -239,8 +125,6 @@ detect_cosimilarity <- function(
                                      msg_done = "[5/5]: Filtered accounts by min_participation={min_participation}")
   
  
-  
-  
   ### Join account_ids
   
   # Set keys for fast joins
@@ -417,8 +301,52 @@ coorsim_prepare_data <- function(
 
 
 
+#' Match Overlapping Posts by Time Window
+#'
+#' This function matches overlapping posts within a specified time window, removes duplicated pairs,
+#' and groups overlaps by `post_id` using data.table functions.
+#'
+#' @param data A data.table containing the columns `post_id`, `account_id`, `time`, `end_time`, and `time_dup`.
+#' 
+#' @return A named list where each name corresponds to a `post_id` and each element is a vector of post IDs that overlap within the specified time window.
+#' @export
+#' 
+coorsim_match_overlaps <- function(data){
+  
+    # Match overlapping posts by time_window
+  
+    overlaps <- data.table::foverlaps(data, data,
+                                      by.x = c("time", "end_time"),
+                                      by.y = c("time", "time_dup"),
+                                      mult = "all",
+                                      type="any",
+                                      nomatch=0L,
+                                      verbose = F)
+    
+    # Rename and subset columns, remove "diagonal" pairs
+    overlaps <- data.table::setnames(overlaps[, .(post_id, account_id, time, i.post_id, i.account_id, i.time)], 
+                         old = c("i.post_id", "i.account_id", "i.time"), 
+                         new = c("post_id_y", "account_id_y", "time_y"))[
+                           post_id != post_id_y
+                         ]
 
-
+  # Function to remove duplicated pairs -- (benchmarked) 
+  remove_dup_pairs <- function(dt) {
+    dt[, c("post_id", "post_id_y") := .(pmin(post_id, post_id_y), # sorts both IDs 
+                                        pmax(post_id, post_id_y))]
+    unique(dt) # drops non-unique pairs
+  }
+  
+  overlaps <- remove_dup_pairs(overlaps)
+  
+  
+  # Split overlaps in groups by post_id - using data.table functions -- (benchmarked)
+  id_list <- overlaps[, .(id_vector = list(unique(c(.BY[[1]], post_id_y)))), by = post_id]
+  id_list <- stats::setNames(id_list$id_vector, id_list$post_id)
+  
+  return(id_list)
+  
+}
 
 
 

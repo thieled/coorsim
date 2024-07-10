@@ -13,9 +13,6 @@ Imports:
     cli,
     data.table,
     lubridate,
-    Matrix,
-    pbapply,
-    proxyC,
     Rcpp (>= 1.0.12),
     stats
 LinkingTo: Rcpp, RcppArmadillo
