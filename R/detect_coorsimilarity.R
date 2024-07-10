@@ -14,10 +14,8 @@
 #' @param time Optional column name for timestamps if not named 'time' in `data`.
 #' @param content Optional column name for content if not named 'content' in `data`.
 #' @param verbose A logical value indicating whether to display progress messages. Default is TRUE.
-#' @param threads An integer specifying the number of threads to use for parallel processing. Default is 10.
 #' @param method A character string specifying the similarity method to use. Default is "cosine".
 #' @param remove_loops A logical value indicating whether to remove loops (self-similar posts from the same account). Default is TRUE.
-#' @param cpp A logical value indicating whether use cpp for similarity calculation.
 #'
 #' @return A data.table containing pairs of similar posts along with their account IDs and similarity scores.
 #'
@@ -35,10 +33,8 @@ detect_cosimilarity <- function(
     time = NULL,
     content = NULL,
     verbose = TRUE,
-    threads = 10,
     method = "cosine", 
-    remove_loops = TRUE,
-    cpp = TRUE
+    remove_loops = TRUE
 ) {
   
   
@@ -64,40 +60,39 @@ detect_cosimilarity <- function(
   
   ### Step 2: Match overlapping posts by time_window
   
-  if(verbose){
-    cli::cli_progress_step("[2/5]: Matching posts published within {time_window}s.",
+  if(verbose)  cli::cli_progress_step("[2/5]: Matching posts published within {time_window}s.",
                            msg_done = "[2/5]: Matched posts published within {time_window}s.")
     
     id_list <- coorsim_match_overlaps(data = data)
     
-    cli::cli_progress_done()
-  }else{
-    
-    id_list <- coorsim_match_overlaps(data = data)
-    
-  }
+  if(verbose) cli::cli_progress_done()
   
   
   ### Step 3:  Query the vector matrix using Rcpp - 
   # Benchmarked against R matrix, data.table, future.lapply solutions
   
-  if(verbose) {
-    cli::cli_progress_step("[3/5]: Querying embeddings using C++.",
+  if(verbose)   cli::cli_progress_step("[3/5]: Querying embeddings using C++.",
                            msg_done = "[3/5]: Queried embeddings using C++.")
+    
     vec_list <- query_embedding(m = vector_matrix, post_id_lists = id_list)
-    cli::cli_progress_done()
-  }else{
-    vec_list <- query_embedding(m = vector_matrix, post_id_lists = id_list)
-  }
+    
+    if(verbose)  cli::cli_progress_done()
   
 
   ### Step 4: Calculate the pairwise similarities
 
     if(verbose){
-      cli::cli_progress_step("[4/5]: Get cosine similarity of n={nrow(overlaps)} pairs using C++", 
-                             msg_done = "[4/5]: Got {method}cosine similarity of n={nrow(overlaps)} pairs using C++")
+      
+      # Calculate number of pairs
+      n_pairs <- sum(vapply(id_list, length, FUN.VALUE = integer(1)))
+      
+      # Status message
+      cli::cli_progress_step("[4/5]: Get cosine similarity of n={n_pairs} pairs using C++", 
+                             msg_done = "[4/5]: Got {method}cosine similarity of n={n_pairs} pairs using C++")
+      # Process
       pairwise_simil_list <- compute_cosine_similarities(matrices_list = vec_list, threshold = min_simil)
       
+      # End process status 
       cli::cli_progress_done()
     
     }else{
@@ -117,7 +112,7 @@ detect_cosimilarity <- function(
     !is.na(similarity)
   ]
   
-  
+
   
   ### Merging account data
   
@@ -128,18 +123,18 @@ detect_cosimilarity <- function(
   ### Join account_ids
   
   # Set keys for fast joins
-  data.table::setkey(data, post_id)
-  data.table::setkey(simil_dt, post_id)
+  setkey(data, post_id)
+  setkey(simil_dt, post_id)
   
   # Join 'data' with 'simil_dt' on 'post_id', retaining 'account_id'
   simil_dt_x <- data[simil_dt, .(post_id, account_id, post_id_y, similarity), on = "post_id", nomatch = 0]
   
   # Set keys for the second join
-  data.table::setkey(simil_dt_x, post_id_y)
+  setkey(simil_dt_x, post_id_y)
   
-  # Join 'result_post' with 'data' on 'post_id_y' and include the account_id as account_id_y
-  simil_dt <- simil_dt_x[data, .(post_id, account_id, post_id_y, similarity, account_id_y = account_id_y), 
-                         on = c("post_id_y" = "post_id"), nomatch = 0]
+  # Join data
+  simil_dt <- simil_dt_x[data, .(post_id, account_id, post_id_y, similarity, account_id_y = i.account_id), 
+                       on = c("post_id_y" = "post_id"), nomatch = 0]
   
   
   
