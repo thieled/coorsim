@@ -1,11 +1,22 @@
 Package: coorsim
 Type: Package
-Title: What the package does (short line)
-Version: 1.0
-Date: 2024-07-10
-Author: Who wrote it
-Maintainer: Who to complain to <yourfault@somewhere.net>
-Description: More about what it does (maybe more than one line)
-License: What license is it under?
-Imports: Rcpp (>= 1.0.12)
+Title: Detects Coordinated Social Media Manipulation Based on Co-Similarity
+Version: 0.0.0.9
+Date: 2024-07-06
+Authors@R: 
+    person("Daniel", "Thiele", , "daniel.thiele@univie.ac.at", role = c("cre", "aut"))
+Description: One paragraph description of what the package does as one or more full sentences.
+License: CC BY 4.0
+Encoding: UTF-8
+Imports: 
+    assertthat,
+    cli,
+    data.table,
+    lubridate,
+    Matrix,
+    pbapply,
+    proxyC,
+    Rcpp (>= 1.0.12),
+    stats
 LinkingTo: Rcpp, RcppArmadillo
+RoxygenNote: 7.3.1

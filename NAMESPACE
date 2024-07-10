@@ -1,3 +1,7 @@
 useDynLib(coorsim, .registration=TRUE)
 importFrom(Rcpp, evalCpp)
 exportPattern("^[[:alpha:]]+")
+export(query_embedding)
+export(detect_cosimilarity)
+export(coorsim_prepare_data)
+export(compute_cosine_similarities)

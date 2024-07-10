@@ -11,55 +11,34 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// rcpparma_hello_world
-arma::mat rcpparma_hello_world();
-RcppExport SEXP _coorsim_rcpparma_hello_world() {
+// compute_cosine_similarities
+List compute_cosine_similarities(List matrices_list, double threshold);
+RcppExport SEXP _coorsim_compute_cosine_similarities(SEXP matrices_listSEXP, SEXP thresholdSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(rcpparma_hello_world());
+    Rcpp::traits::input_parameter< List >::type matrices_list(matrices_listSEXP);
+    Rcpp::traits::input_parameter< double >::type threshold(thresholdSEXP);
+    rcpp_result_gen = Rcpp::wrap(compute_cosine_similarities(matrices_list, threshold));
     return rcpp_result_gen;
 END_RCPP
 }
-// rcpparma_outerproduct
-arma::mat rcpparma_outerproduct(const arma::colvec& x);
-RcppExport SEXP _coorsim_rcpparma_outerproduct(SEXP xSEXP) {
+// query_embedding
+List query_embedding(NumericMatrix m, List post_id_lists);
+RcppExport SEXP _coorsim_query_embedding(SEXP mSEXP, SEXP post_id_listsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::colvec& >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(rcpparma_outerproduct(x));
-    return rcpp_result_gen;
-END_RCPP
-}
-// rcpparma_innerproduct
-double rcpparma_innerproduct(const arma::colvec& x);
-RcppExport SEXP _coorsim_rcpparma_innerproduct(SEXP xSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::colvec& >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(rcpparma_innerproduct(x));
-    return rcpp_result_gen;
-END_RCPP
-}
-// rcpparma_bothproducts
-Rcpp::List rcpparma_bothproducts(const arma::colvec& x);
-RcppExport SEXP _coorsim_rcpparma_bothproducts(SEXP xSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::colvec& >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(rcpparma_bothproducts(x));
+    Rcpp::traits::input_parameter< NumericMatrix >::type m(mSEXP);
+    Rcpp::traits::input_parameter< List >::type post_id_lists(post_id_listsSEXP);
+    rcpp_result_gen = Rcpp::wrap(query_embedding(m, post_id_lists));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_coorsim_rcpparma_hello_world", (DL_FUNC) &_coorsim_rcpparma_hello_world, 0},
-    {"_coorsim_rcpparma_outerproduct", (DL_FUNC) &_coorsim_rcpparma_outerproduct, 1},
-    {"_coorsim_rcpparma_innerproduct", (DL_FUNC) &_coorsim_rcpparma_innerproduct, 1},
-    {"_coorsim_rcpparma_bothproducts", (DL_FUNC) &_coorsim_rcpparma_bothproducts, 1},
+    {"_coorsim_compute_cosine_similarities", (DL_FUNC) &_coorsim_compute_cosine_similarities, 2},
+    {"_coorsim_query_embedding", (DL_FUNC) &_coorsim_query_embedding, 2},
     {NULL, NULL, 0}
 };
 
