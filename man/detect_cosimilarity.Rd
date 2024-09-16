@@ -16,7 +16,8 @@ detect_cosimilarity(
   content = NULL,
   verbose = TRUE,
   method = "cosine",
-  remove_loops = TRUE
+  remove_loops = TRUE,
+  parallel = TRUE
 )
 }
 \arguments{
@@ -43,6 +44,8 @@ detect_cosimilarity(
 \item{method}{A character string specifying the similarity method to use. Default is "cosine".}
 
 \item{remove_loops}{A logical value indicating whether to remove loops (self-similar posts from the same account). Default is TRUE.}
+
+\item{parallel}{A logical value indicating whether tbb for parallel processing should be used. Also see set_num_threads.}
 }
 \value{
 A data.table containing pairs of similar posts along with their account IDs and similarity scores.

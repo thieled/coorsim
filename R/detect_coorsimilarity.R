@@ -16,6 +16,7 @@
 #' @param verbose A logical value indicating whether to display progress messages. Default is TRUE.
 #' @param method A character string specifying the similarity method to use. Default is "cosine".
 #' @param remove_loops A logical value indicating whether to remove loops (self-similar posts from the same account). Default is TRUE.
+#' @param parallel A logical value indicating whether tbb for parallel processing should be used. Also see set_num_threads. 
 #'
 #' @return A data.table containing pairs of similar posts along with their account IDs and similarity scores.
 #'
@@ -34,13 +35,14 @@ detect_cosimilarity <- function(
     content = NULL,
     verbose = TRUE,
     method = "cosine", 
-    remove_loops = TRUE
+    remove_loops = TRUE,
+    parallel = TRUE
 ) {
   
   
   ### Step 1: Preprocess data
   
-  if(verbose) cli::cli_progress_step("[1/5]: Preprocessing.")
+  if(verbose) cli::cli_progress_step("[1/4]: Preprocessing.")
   
   data <- coorsim_prepare_data(
                 data = data,
@@ -60,8 +62,8 @@ detect_cosimilarity <- function(
   
   ### Step 2: Match overlapping posts by time_window
   
-  if(verbose)  cli::cli_progress_step("[2/5]: Matching posts published within {time_window}s.",
-                           msg_done = "[2/5]: Matched posts published within {time_window}s.")
+  if(verbose)  cli::cli_progress_step("[2/4]: Matching posts published within {time_window}s.",
+                           msg_done = "[2/4]: Matched posts published within {time_window}s.")
     
     id_list <- coorsim_match_overlaps(data = data)
     
@@ -70,35 +72,50 @@ detect_cosimilarity <- function(
   
   ### Step 3:  Query the vector matrix using Rcpp - 
   # Benchmarked against R matrix, data.table, future.lapply solutions
+  # 
+  # if(verbose)   cli::cli_progress_step("[3/5]: Querying embeddings using C++.",
+  #                          msg_done = "[3/5]: Queried embeddings using C++.")
+  #   
+  #   vec_list <- query_embedding(m = vector_matrix, post_id_lists = id_list)
+  #   
+  #   if(verbose)  cli::cli_progress_done()
   
-  if(verbose)   cli::cli_progress_step("[3/5]: Querying embeddings using C++.",
-                           msg_done = "[3/5]: Queried embeddings using C++.")
+  # Note: Merged Step 3 and 4 in one Cpp step to be more memory efficient, ( and faster ?)
     
-    vec_list <- query_embedding(m = vector_matrix, post_id_lists = id_list)
+  if(verbose)   cli::cli_progress_step("[3/4]: Querying embeddings and calculate similarities using C++.",
+                                         msg_done = "[3/4]: Queried embeddings, calculated similarities using C++.")
+    
+    if(parallel){
+      pairwise_simil_list <- query_and_compute_similarities_tbb(m = vector_matrix, post_id_lists = id_list, threshold = min_simil)
+    }else{
+      pairwise_simil_list <- query_and_compute_similarities(m = vector_matrix, post_id_lists = id_list, threshold = min_simil)  
+    }
+    
     
     if(verbose)  cli::cli_progress_done()
-  
-
-  ### Step 4: Calculate the pairwise similarities
-
-    if(verbose){
-      
-      # Calculate number of pairs
-      n_pairs <- sum(vapply(id_list, length, FUN.VALUE = integer(1)))
-      
-      # Status message
-      cli::cli_progress_step("[4/5]: Get cosine similarity of n={n_pairs} pairs using C++", 
-                             msg_done = "[4/5]: Got {method}cosine similarity of n={n_pairs} pairs using C++")
-      # Process
-      pairwise_simil_list <- compute_cosine_similarities(matrices_list = vec_list, threshold = min_simil)
-      
-      # End process status 
-      cli::cli_progress_done()
     
-    }else{
-      pairwise_simil_list <- compute_cosine_similarities(matrices_list = vec_list, threshold = min_simil)
-    }
-  
+    
+    
+  # ### Step 4: Calculate the pairwise similarities
+  # 
+  #   if(verbose){
+  #     
+  #     # Calculate number of pairs
+  #     n_pairs <- sum(vapply(id_list, length, FUN.VALUE = integer(1)))
+  #     
+  #     # Status message
+  #     cli::cli_progress_step("[4/5]: Get cosine similarity of n={n_pairs} pairs using C++", 
+  #                            msg_done = "[4/5]: Got {method}cosine similarity of n={n_pairs} pairs using C++")
+  #     # Process
+  #     pairwise_simil_list <- compute_cosine_similarities(matrices_list = vec_list, threshold = min_simil)
+  #     
+  #     # End process status 
+  #     cli::cli_progress_done()
+  #   
+  #   }else{
+  #     pairwise_simil_list <- compute_cosine_similarities(matrices_list = vec_list, threshold = min_simil)
+  #   }
+  # 
   
   # Bind to simil_dt 
   simil_dt <- pairwise_simil_list |>
@@ -116,8 +133,8 @@ detect_cosimilarity <- function(
   
   ### Merging account data
   
-  if(verbose) cli::cli_progress_step("[5/5]: Filter accounts by min_participation={min_participation}",
-                                     msg_done = "[5/5]: Filtered accounts by min_participation={min_participation}")
+  if(verbose) cli::cli_progress_step("[4/4]: Filter accounts by min_participation={min_participation}",
+                                     msg_done = "[4/4]: Filtered accounts by min_participation={min_participation}")
   
  
   ### Join account_ids
