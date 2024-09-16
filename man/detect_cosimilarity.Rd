@@ -15,10 +15,8 @@ detect_cosimilarity(
   time = NULL,
   content = NULL,
   verbose = TRUE,
-  threads = 10,
   method = "cosine",
-  remove_loops = TRUE,
-  cpp = TRUE
+  remove_loops = TRUE
 )
 }
 \arguments{
@@ -42,13 +40,9 @@ detect_cosimilarity(
 
 \item{verbose}{A logical value indicating whether to display progress messages. Default is TRUE.}
 
-\item{threads}{An integer specifying the number of threads to use for parallel processing. Default is 10.}
-
 \item{method}{A character string specifying the similarity method to use. Default is "cosine".}
 
 \item{remove_loops}{A logical value indicating whether to remove loops (self-similar posts from the same account). Default is TRUE.}
-
-\item{cpp}{A logical value indicating whether use cpp for similarity calculation.}
 }
 \value{
 A data.table containing pairs of similar posts along with their account IDs and similarity scores.

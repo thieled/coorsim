@@ -16,4 +16,4 @@ Imports:
     Rcpp (>= 1.0.12),
     stats
 LinkingTo: Rcpp, RcppArmadillo
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2

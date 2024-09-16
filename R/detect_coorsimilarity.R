@@ -123,14 +123,14 @@ detect_cosimilarity <- function(
   ### Join account_ids
   
   # Set keys for fast joins
-  setkey(data, post_id)
-  setkey(simil_dt, post_id)
+  data.table::setkey(data, post_id)
+  data.table::setkey(simil_dt, post_id)
   
   # Join 'data' with 'simil_dt' on 'post_id', retaining 'account_id'
   simil_dt_x <- data[simil_dt, .(post_id, account_id, post_id_y, similarity), on = "post_id", nomatch = 0]
   
   # Set keys for the second join
-  setkey(simil_dt_x, post_id_y)
+  data.table::setkey(simil_dt_x, post_id_y)
   
   # Join data
   simil_dt <- simil_dt_x[data, .(post_id, account_id, post_id_y, similarity, account_id_y = i.account_id), 
