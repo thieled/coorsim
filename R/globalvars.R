@@ -14,6 +14,7 @@ utils::globalVariables(c(".",
                          "x",
                          "similarity",
                          ".N",
+                         "time_diff",
                          "N"))
 
 

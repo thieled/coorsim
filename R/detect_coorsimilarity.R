@@ -70,18 +70,8 @@ detect_cosimilarity <- function(
   if(verbose) cli::cli_progress_done()
   
   
-  ### Step 3:  Query the vector matrix using Rcpp - 
-  # Benchmarked against R matrix, data.table, future.lapply solutions
-  # 
-  # if(verbose)   cli::cli_progress_step("[3/5]: Querying embeddings using C++.",
-  #                          msg_done = "[3/5]: Queried embeddings using C++.")
-  #   
-  #   vec_list <- query_embedding(m = vector_matrix, post_id_lists = id_list)
-  #   
-  #   if(verbose)  cli::cli_progress_done()
-  
-  # Note: Merged Step 3 and 4 in one Cpp step to be more memory efficient, ( and faster ?)
-    
+  ### Step 3:  Query the vector matrix and calculate pairwise similarities using Cpp
+
   if(verbose)   cli::cli_progress_step("[3/4]: Querying embeddings and calculate similarities using C++.",
                                          msg_done = "[3/4]: Queried embeddings, calculated similarities using C++.")
     
@@ -94,29 +84,7 @@ detect_cosimilarity <- function(
     
     if(verbose)  cli::cli_progress_done()
     
-    
-    
-  # ### Step 4: Calculate the pairwise similarities
-  # 
-  #   if(verbose){
-  #     
-  #     # Calculate number of pairs
-  #     n_pairs <- sum(vapply(id_list, length, FUN.VALUE = integer(1)))
-  #     
-  #     # Status message
-  #     cli::cli_progress_step("[4/5]: Get cosine similarity of n={n_pairs} pairs using C++", 
-  #                            msg_done = "[4/5]: Got {method}cosine similarity of n={n_pairs} pairs using C++")
-  #     # Process
-  #     pairwise_simil_list <- compute_cosine_similarities(matrices_list = vec_list, threshold = min_simil)
-  #     
-  #     # End process status 
-  #     cli::cli_progress_done()
-  #   
-  #   }else{
-  #     pairwise_simil_list <- compute_cosine_similarities(matrices_list = vec_list, threshold = min_simil)
-  #   }
-  # 
-  
+
   # Bind to simil_dt 
   simil_dt <- pairwise_simil_list |>
     data.table::rbindlist(use.names = T, fill = T) |>
@@ -131,7 +99,7 @@ detect_cosimilarity <- function(
   
 
   
-  ### Merging account data
+  ### Step 4: Merging account and time data
   
   if(verbose) cli::cli_progress_step("[4/4]: Filter accounts by min_participation={min_participation}",
                                      msg_done = "[4/4]: Filtered accounts by min_participation={min_participation}")
@@ -143,16 +111,19 @@ detect_cosimilarity <- function(
   data.table::setkey(data, post_id)
   data.table::setkey(simil_dt, post_id)
   
+  
   # Join 'data' with 'simil_dt' on 'post_id', retaining 'account_id'
-  simil_dt_x <- data[simil_dt, .(post_id, account_id, post_id_y, similarity), on = "post_id", nomatch = 0]
+  simil_dt_x <- data[simil_dt, .(post_id, time, account_id, post_id_y, similarity), on = "post_id", nomatch = 0]
   
   # Set keys for the second join
   data.table::setkey(simil_dt_x, post_id_y)
   
   # Join data
-  simil_dt <- simil_dt_x[data, .(post_id, account_id, post_id_y, similarity, account_id_y = i.account_id), 
-                       on = c("post_id_y" = "post_id"), nomatch = 0]
+  simil_dt <- simil_dt_x[data, .(post_id, time, account_id, post_id_y, similarity, account_id_y = i.account_id, time_y = i.time), 
+                         on = c("post_id_y" = "post_id"), nomatch = 0]
   
+  # Compute difftime variable
+  simil_dt[, time_diff := difftime(time1 = time_y, time2 = time, units = "secs")]  
   
   
   ### Filter by n account occurences
