@@ -256,11 +256,18 @@ coorsim_prepare_data <- function(
   if (!lubridate::is.POSIXct(data$time) || !lubridate::is.POSIXlt(data$time)) {
     # Parse 'time' column to datetime
     parsed_time <- lubridate::parse_date_time(data$time, orders = c("ymd HMS", "ymd HM", "ymd H", "ymd", "dmy HMS", "dmy HM", "dmy H", "dmy"))
-    assertthat::assert_that(!any(is.na(parsed_time)), msg = "Invalid datetime format in 'time' column.")
     
-    # Convert to POSIXct format and set to UTC
-    data[, time := as.POSIXct(lubridate::with_tz(parsed_time, tzone = "UTC"))]
+    # Filter out invalid datetime observations
+    if(verbose && any(is.na(parsed_time))) {
+      n_error <- nrow(data[is.na(parsed_time)])
+      warning(paste("Dropping", n_error, "observations due to invalid time formats."))
+    }
+    data <- data[!is.na(parsed_time)]
+    # Convert to POSIXct format and set to UTC for valid observations
+    data[, time := as.POSIXct(lubridate::with_tz(parsed_time[!is.na(parsed_time)], tzone = "UTC"))]
+    
   }
+  
   
   # Join the data.table with itself based on the time window
   data[, end_time := time + time_window] # Define end time for the window
