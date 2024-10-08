@@ -15,7 +15,14 @@ utils::globalVariables(c(".",
                          "similarity",
                          ".N",
                          "time_diff",
-                         "N"))
+                         "N",
+                         "weight",
+                         "algorithm",
+                         ".SD",
+                         "from",
+                         "to",
+                         "community",
+                         "parameters"))
 
 
 .datatable.aware <- TRUE

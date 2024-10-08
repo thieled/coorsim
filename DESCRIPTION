@@ -12,6 +12,7 @@ Imports:
     assertthat,
     cli,
     data.table,
+    igraph,
     lubridate,
     Rcpp (>= 1.0.12),
     stats
