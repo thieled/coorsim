@@ -253,7 +253,7 @@ coorsim_prepare_data <- function(
   ### Time variables
   
   # Check if 'time' column is already in POSIXct or POSIXlt format
-  if (!lubridate::is.POSIXct(data$time) || !lubridate::is.POSIXlt(data$time)) {
+  if (!lubridate::is.POSIXct(data$time) && !lubridate::is.POSIXlt(data$time)) {
     # Parse 'time' column to datetime
     parsed_time <- lubridate::parse_date_time(data$time, orders = c("ymd HMS", "ymd HM", "ymd H", "ymd", "dmy HMS", "dmy HM", "dmy H", "dmy"))
     
