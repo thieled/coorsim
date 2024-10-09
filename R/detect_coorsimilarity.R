@@ -268,6 +268,12 @@ coorsim_prepare_data <- function(
     
   }
   
+  # Filter out invalid datetime observations - also 
+    if(verbose && any(is.na(data$time))) {
+      n_error <- nrow(data[is.na(data$time)])
+      warning(paste("Dropping", n_error, "observations due to invalid time formats."))
+    }
+  
   
   # Join the data.table with itself based on the time window
   data[, end_time := time + time_window] # Define end time for the window
