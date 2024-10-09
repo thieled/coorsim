@@ -272,7 +272,7 @@ coorsim_prepare_data <- function(
     if(verbose && any(is.na(data$time))) {
       n_error <- nrow(data[is.na(data$time)])
       warning(paste("Dropping", n_error, "observations due to invalid time formats."))
-      data <- data[!is.na(parsed_time)]
+      data <- data[!is.na(data$time)]
     }
   
   
