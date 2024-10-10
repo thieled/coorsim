@@ -163,27 +163,34 @@ coorsim_detect_groups <- function(simdt,
     # FSA_V Algorithm, following Weber/Neumann (2021) - implemented in data.table
     fs_list <- community_edges[, {
       
-      # Sort and initialize the first edge
+      # Sort edges by weight in descending order
       sorted_edges <- .SD[order(-weight)]
       if (is.na(sorted_edges[1, weight])) return(NULL)  # skip if no valid weight
-      candidate_edges <- list(sorted_edges[1, .(from, to, weight)])
-      edge_weights <- sorted_edges[1, weight]
+      
+      # Initialize the first edge and cumulative stats
+      candidate_edges <- vector("list", .N)  # Preallocate list for candidate edges
+      candidate_edges[[1]] <- sorted_edges[1, .(from, to, weight)]
+      edge_weights <- sorted_edges[1, weight]  # Store weights for mean calculation
+      edge_count <- 1
       still_growing <- TRUE
       
-      # Iteratively add edges while maintaining the mean threshold
+      # Loop through sorted edges starting from the second edge
       for (i in 2:.N) {
-        if (is.na(sorted_edges[i, weight])) break
-        new_mean <- mean(c(edge_weights, sorted_edges[i, weight]), na.rm = TRUE)
         current_weight <- sorted_edges[i, weight]
         
-        # Check if the current weight or new mean is valid and meets criteria
-        if (!is.na(current_weight) && 
-            !is.na(new_mean) && 
-            current_weight >= g_mean && 
-            new_mean >= mean(edge_weights, na.rm = TRUE) * theta) {
+        # Calculate new mean with the addition of the current edge weight
+        new_mean <- mean(c(edge_weights, current_weight), na.rm = TRUE)
+        previous_mean <- mean(edge_weights, na.rm = TRUE)
+        
+        # Check if conditions hold for including the current edge
+        if (!is.na(current_weight) &&
+            current_weight >= g_mean &&
+            new_mean >= theta * previous_mean) {
           
-          candidate_edges[[length(candidate_edges) + 1]] <- sorted_edges[i, .(from, to, weight)]
+          # Update cumulative edge list and edge weights
           edge_weights <- c(edge_weights, current_weight)
+          candidate_edges[[edge_count + 1]] <- sorted_edges[i, .(from, to, weight)]
+          edge_count <- edge_count + 1
           
         } else {
           still_growing <- FALSE
@@ -191,10 +198,11 @@ coorsim_detect_groups <- function(simdt,
         }
       }
       
-      # Return candidate edges that satisfy conditions
-      data.table::rbindlist(candidate_edges, fill = TRUE)
+      # Return the list of selected edges for this community, removing any unused slots
+      data.table::rbindlist(candidate_edges[1:edge_count], fill = TRUE)
       
     }, by = community]
+    
     
     
     ### Create igraph communities object
