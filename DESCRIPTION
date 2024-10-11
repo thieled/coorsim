@@ -1,17 +1,22 @@
 Package: coorsim
 Type: Package
 Title: Detects Coordinated Social Media Manipulation Based on Co-Similarity
-Version: 0.0.0.9
-Date: 2024-07-06
+Version: 0.0.1.0
+Date: 2024-10-11
 Authors@R: 
-    person("Daniel", "Thiele", , "daniel.thiele@univie.ac.at", role = c("cre", "aut"))
-Description: One paragraph description of what the package does as one or more full sentences.
+    person("Daniel", "Thiele", , "daniel.thiele@fu-berlin.de", role = c("cre", "aut"))
+Description: R package for detection of Coordinated Social Media Manipulation (CSMM). 
+    Detects sharing of highly similar content within short time windows, drawing on cosine similarity of content embeddings. 
+    Implements the Focal Structure Algorithm Variant of Weber & Neumann (2021) to identify highly coordinated clusters of accounts. 
+    Provides functions to plot and analyze coordinated networks, accounts, and content. 
+    Co-Similarity compuation is C++ based and parallelized. Efficient data-wrangling is warranted by data.table.
 License: CC BY 4.0
 Encoding: UTF-8
 Imports: 
     assertthat,
     cli,
     data.table,
+    ggplot2,
     igraph,
     lubridate,
     Rcpp (>= 1.0.12),

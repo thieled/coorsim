@@ -11,30 +11,6 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// compute_cosine_similarities
-List compute_cosine_similarities(List matrices_list, double threshold);
-RcppExport SEXP _coorsim_compute_cosine_similarities(SEXP matrices_listSEXP, SEXP thresholdSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< List >::type matrices_list(matrices_listSEXP);
-    Rcpp::traits::input_parameter< double >::type threshold(thresholdSEXP);
-    rcpp_result_gen = Rcpp::wrap(compute_cosine_similarities(matrices_list, threshold));
-    return rcpp_result_gen;
-END_RCPP
-}
-// query_embedding
-List query_embedding(NumericMatrix m, List post_id_lists);
-RcppExport SEXP _coorsim_query_embedding(SEXP mSEXP, SEXP post_id_listsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericMatrix >::type m(mSEXP);
-    Rcpp::traits::input_parameter< List >::type post_id_lists(post_id_listsSEXP);
-    rcpp_result_gen = Rcpp::wrap(query_embedding(m, post_id_lists));
-    return rcpp_result_gen;
-END_RCPP
-}
 // query_and_compute_similarities
 List query_and_compute_similarities(NumericMatrix m, List post_id_lists, double threshold);
 RcppExport SEXP _coorsim_query_and_compute_similarities(SEXP mSEXP, SEXP post_id_listsSEXP, SEXP thresholdSEXP) {
@@ -73,8 +49,6 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_coorsim_compute_cosine_similarities", (DL_FUNC) &_coorsim_compute_cosine_similarities, 2},
-    {"_coorsim_query_embedding", (DL_FUNC) &_coorsim_query_embedding, 2},
     {"_coorsim_query_and_compute_similarities", (DL_FUNC) &_coorsim_query_and_compute_similarities, 3},
     {"_coorsim_set_num_threads", (DL_FUNC) &_coorsim_set_num_threads, 1},
     {"_coorsim_query_and_compute_similarities_tbb", (DL_FUNC) &_coorsim_query_and_compute_similarities_tbb, 3},
