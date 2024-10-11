@@ -94,13 +94,13 @@ plot_coordinated_posts <- function(network_data,
   if(!is.null(n_communities)){
     
     # Step 1: Calculate the sum of N by community
-    sum_by_community <- agg_data[, .(total_N = sum(N)), by = community]
+    comm_size <- agg_data[, .(N = sum(N)), by = community]
     
     # Step 2: Get the top communities by total N
-    top_n_communities <- sum_by_community[order(-total_N)][1:n_communities, community]
+    keep_comm_i <- comm_size[order(-N)][1:n_communities, community]
     
     # Step 3: Filter agg_data to include only rows from the top communities
-    agg_data_filtered <- agg_data[community %in% top_n_communities]
+    keep_comm <- agg_data[community %in% keep_comm_i]
     
     
     # Store filter info
@@ -111,13 +111,11 @@ plot_coordinated_posts <- function(network_data,
                             ", mean=", round(mean(keep_comm$N, na.rm = T),1),
                             "(", round(stats::sd(keep_comm$N, na.rm = T),1), ")."
       )
-      
     }
     
     
-    
     # Step 6: Create a ggplot geom_bar plot, showing the number of observations per community per hour
-    p <- agg_data_filtered |> 
+    p <- keep_comm |> 
       ggplot2::ggplot(ggplot2::aes(x = time_floored, 
                                    y = N, 
                                    fill = factor(community))) +
@@ -156,7 +154,6 @@ plot_coordinated_posts <- function(network_data,
                     x = "Time") +
       ggplot2::theme_minimal() +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, vjust = 1, hjust = 1))
-    
     
     
   }
