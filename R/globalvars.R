@@ -24,7 +24,8 @@ utils::globalVariables(c(".",
                          "community",
                          "parameters",
                          "time_floored",
-                         "total_N"))
+                         "total_N",
+                         "name"))
 
 
 .datatable.aware <- TRUE
