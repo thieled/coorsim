@@ -247,6 +247,7 @@ coorsim_detect_groups <- function(simdt,
     filtered <- unique(c(fs_list$from, fs_list$to))
     
     # Filter edge_list based on the unique accounts from filtered
+    ### MEMO: Revise the condition - Should I not rather filter by that EXACT EDGE instead of nodes?
     edge_list <- edge_list[account_id %in% filtered & account_id_y %in% filtered]
     
     
