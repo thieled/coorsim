@@ -238,9 +238,9 @@ coorsim_detect_groups <- function(simdt,
     node_membership_dt[, algorithm := cluster_method]
     node_membership_dt[, parameters := paste0("theta = ", theta, "; resolution = ", resolution)]
     
-    # Store edge list and communities object
+    # Store graph, edge list and communities object
     communities <- fsa_communities
-    
+    g <- g_filtered
     edge_list <- fs_list[, .(account_id = from, account_id_y = to, weight, community)]
     
   } else {
