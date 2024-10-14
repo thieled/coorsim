@@ -160,34 +160,27 @@ coorsim_detect_groups <- function(simdt,
                              by.x = "from", 
                              by.y = "account_id")
     
-    # FSA_V Algorithm, following Weber/Neumann (2021) - implemented in data.table
+    # Step 2: Apply FSA_V algorithm
     fs_list <- community_edges[, {
       
-      # Sort edges by weight in descending order
       sorted_edges <- .SD[order(-weight)]
       if (is.na(sorted_edges[1, weight])) return(NULL)  # skip if no valid weight
       
-      # Initialize the first edge and cumulative stats
-      candidate_edges <- vector("list", .N)  # Preallocate list for candidate edges
+      candidate_edges <- vector("list", .N)
       candidate_edges[[1]] <- sorted_edges[1, .(from, to, weight)]
-      edge_weights <- sorted_edges[1, weight]  # Store weights for mean calculation
+      edge_weights <- sorted_edges[1, weight]
       edge_count <- 1
       still_growing <- TRUE
       
-      # Loop through sorted edges starting from the second edge
       for (i in 2:.N) {
         current_weight <- sorted_edges[i, weight]
-        
-        # Calculate new mean with the addition of the current edge weight
         new_mean <- mean(c(edge_weights, current_weight), na.rm = TRUE)
         previous_mean <- mean(edge_weights, na.rm = TRUE)
         
-        # Check if conditions hold for including the current edge
         if (!is.na(current_weight) &&
             current_weight >= g_mean &&
             new_mean >= theta * previous_mean) {
           
-          # Update cumulative edge list and edge weights
           edge_weights <- c(edge_weights, current_weight)
           candidate_edges[[edge_count + 1]] <- sorted_edges[i, .(from, to, weight)]
           edge_count <- edge_count + 1
@@ -198,58 +191,57 @@ coorsim_detect_groups <- function(simdt,
         }
       }
       
-      # Return the list of selected edges for this community, removing any unused slots
       data.table::rbindlist(candidate_edges[1:edge_count], fill = TRUE)
       
     }, by = community]
     
     
+    # Step 3: Create a new graph based on the edges from FSA_V
+    g_filtered <- igraph::graph_from_data_frame(fs_list[, .(from, to, weight)], directed = FALSE)
     
-    ### Create igraph communities object
+    # Step 4: Re-run clustering on the filtered graph to assign final community labels
+    set.seed(seed)
+    fsa_communities <- igraph::cluster_louvain(g_filtered)
+    fsa_membership <- igraph::membership(fsa_communities)
     
-    # Convert fs_list into an igraph graph object 
-    g <- igraph::graph_from_data_frame(fs_list[, .(from, to, weight)], directed = FALSE)
+    # Step 5: Map filtered graph communities back to original nodes
+    membership_dt <- data.table::data.table(
+      account_id = names(fsa_membership),
+      community = as.integer(fsa_membership)
+    )
     
+    # Step 6: Ensure that each account_id belongs to a unique community, removing any overlapping assignments
+    membership_dt <- unique(membership_dt, by = "account_id")
     
-    # Prepare membership object
+    # Reassign final community to fs_list
+    fs_list <- merge(fs_list, membership_dt, by.x = "from", by.y = "account_id", all.x = TRUE)
     
-    # Combine 'from' and 'to' columns, and keep unique entries for each community
-    membership_dt <- unique(fs_list[, .(account_id = c(from, to), community)])
+    # Update the community column with final community labels
+    fs_list[, community := community.y]
+    fs_list[, community.x := NULL]
+    fs_list[, community.y := NULL]
     
-    # Convert to numeric vector, setting names to match account_id
-    membership <- as.integer(membership_dt$community)
-    names(membership) <- membership_dt$account_id
+    # Create component data table
+    components <- igraph::components(g)
+    component_memberships <- components$membership
+    component_ids <- names(components$membership)
+    component_dt <- data.table::data.table(
+      account_id = as.character(component_ids),
+      component = component_memberships
+    ) 
     
-    # Reorder 'membership' to match vertices in fs_graph
-    membership <- membership[match(igraph::V(g)$name, names(membership))]
+    # Merge component info
+    node_membership_dt <- merge(membership_dt, component_dt, by = "account_id", all.x = T)
     
-    # Replace any NAs with a new community ID (e.g., max existing + 1)
-    na_replacement <- max(membership, na.rm = TRUE) + 1
-    membership[is.na(membership)] <- na_replacement
-    
-    # Ensure the result is a valid igraph membership object
-    membership <- igraph::as_membership(membership)
-    
-    # Create a communities object
-    communities <- igraph::make_clusters(g, membership = membership, algorithm = cluster_method)
-    
-    # Create node membership datatable for export
-    node_membership_dt <- merge(node_list[match(igraph::V(g)$name, node_list$account_id)],
-                                data.table::data.table(
-                                  account_id = as.character(names(membership)), 
-                                  community = membership),
-                                by = "account_id")
+    # Merge node list variables
+    node_membership_dt <- merge(node_membership_dt, node_list, by = "account_id", all.x = T)
     node_membership_dt[, algorithm := cluster_method]
     node_membership_dt[, parameters := paste0("theta = ", theta, "; resolution = ", resolution)]
     
+    # Store edge list and communities object
+    communities <- fsa_communities
     
-    ### Filter edge and node list
-    filtered <- unique(c(fs_list$from, fs_list$to))
-    
-    # Filter edge_list based on the unique accounts from filtered
-    ### MEMO: Revise the condition - Should I not rather filter by that EXACT EDGE instead of nodes?
-    edge_list <- edge_list[account_id %in% filtered & account_id_y %in% filtered]
-    
+    edge_list <- fs_list[, .(account_id = from, account_id_y = to, weight, community)]
     
   } else {
     stop("Invalid cluster_method. Choose 'louvain', 'infomap', or 'dbscan'.")
