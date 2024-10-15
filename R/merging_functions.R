@@ -125,3 +125,174 @@ augment_similarity_table <- function(
   # Return the augmented similarity table
   return(sim_dt)
 }
+
+
+
+
+
+#' Augment Group Data with Post and User Information
+#'
+#' This function merges additional post and user data into a grouped data structure, `groups_data`.
+#' It supports renaming columns for consistency, de-duplication, and optional content sampling.
+#'
+#' @param groups_data A list with at least one element `node_list` (a `data.table` containing node information).
+#'                    Optionally, it may also contain `post_data` (a `data.table` of post information).
+#' @param post_data A `data.table` containing additional post data to be merged.
+#' @param user_data A `data.table` containing user data to be merged.
+#' @param post_id Optional. Column name in `post_data` to be renamed to 'post_id' for joining.
+#' @param account_id Optional. Column name in `user_data` and `groups_data` to be renamed to 'account_id' for joining.
+#' @param content Optional. Column name in `post_data` containing post content, renamed to 'content'.
+#' @param other_post_vars Optional. Additional columns to retain from `post_data`.
+#' @param other_user_vars Optional. Additional columns to retain from `user_data`.
+#' @param sample_content Logical. If `TRUE`, samples content from `post_data` by `account_id` and merges sampled text into `node_list`.
+#' @param sample_n Integer. Number of posts to sample per `account_id` if `sample_content` is `TRUE`. Defaults to 10.
+#' @param sep Character. Separator used to concatenate sampled content. Defaults to " +++ ".
+#' @param seed Integer. Random seed for reproducibility of sampled content. Defaults to 42.
+#' @param verbose Logical. If `TRUE`, provides detailed output about each processing step.
+#'
+#' @return A list, `groups_data`, with the following modifications:
+#'   - `post_data` augmented with user information and additional post columns, if present in `groups_data`.
+#'   - `node_list` augmented with user data and optionally, sampled content from `post_data`.
+#'
+#' @details
+#' This function harmonizes column names and performs left joins to add relevant data. When `sample_content`
+#' is `TRUE`, it samples `sample_n` posts from `post_data` per `account_id`, concatenates them with the specified separator `sep`,
+#' and adds the resulting strings to `node_list`.
+#'
+#' @export
+augment_groups_data <- function(
+    groups_data,
+    post_data,
+    user_data,
+    post_id = NULL, 
+    account_id = NULL, 
+    content = NULL,
+    other_post_vars = NULL,
+    other_user_vars = NULL,
+    sample_content = FALSE,
+    sample_n = 10,
+    sep = " +++ ",
+    seed = 42,
+    verbose = FALSE
+) {
+  # Ensure inputs are data.tables if not already
+  if (!data.table::is.data.table(groups_data$node_list)) groups_data$node_list <- data.table::as.data.table(groups_data$node_list)
+  if ("post_data" %in% names(groups_data)) {
+    if (!data.table::is.data.table(groups_data$post_data)) groups_data$post_data <- data.table::as.data.table(groups_data$post_data)
+  }
+  if (!data.table::is.data.table(post_data)) post_data <- data.table::as.data.table(post_data)
+  if (!data.table::is.data.table(user_data)) user_data <- data.table::as.data.table(user_data)
+  
+  # Check and rename post_data columns
+  if (verbose) cli::cli_inform("Harmonizing 'post_data'...\n")
+  
+  # Rename columns if alternative names are given and match
+  post_col_renames <- list(post_id = post_id, content = content)
+  for (col in names(post_col_renames)) {
+    alt_name <- post_col_renames[[col]]
+    if (!is.null(alt_name) && alt_name %in% names(post_data)) {
+      data.table::setnames(post_data, alt_name, col)
+    }
+  }
+  
+  # Select relevant columns from post_data
+  post_cols_to_keep <- c("post_id", "content", other_post_vars)
+  post_data <- post_data[, intersect(post_cols_to_keep, names(post_data)), with = FALSE]
+  
+  ### De-duplicating post_data ###
+  if (any(duplicated(post_data$post_id))){
+    if (verbose) cat("De-duplicating 'post_data'...\n")
+    post_data <- post_data[!duplicated(post_data$post_id)]
+  }
+  
+  
+  # Check and rename user_data columns
+  if (verbose) cli::cli_inform("Harmonizing 'user_data'...\n")
+  
+  user_col_renames <- list(account_id = account_id)
+  for (col in names(user_col_renames)) {
+    alt_name <- user_col_renames[[col]]
+    if (!is.null(alt_name) && alt_name %in% names(user_data)) {
+      data.table::setnames(user_data, alt_name, col)
+    }
+  }
+  
+  # Add prefix to user_data columns (except account_id)
+  user_cols_to_keep <- c("account_id", other_user_vars)
+  user_data <- user_data[, intersect(user_cols_to_keep, names(user_data)), with = FALSE]
+  user_cols <- setdiff(names(user_data), c("account_id"))
+  data.table::setnames(user_data, user_cols, paste0("account_", user_cols))
+  
+  ### De-duplicating user_data ###
+  if (any(duplicated(user_data$user_id))){
+    if (verbose) cli::cli_inform("De-duplicating 'user_data'...\n")
+    user_data <- user_data[!duplicated(user_data$account_id)]
+  } 
+  
+  ### Merging process using data.table's direct join syntax ###
+  # Join 'post_data' to 'post_data' by "post_id" (left join)
+  if ("post_data" %in% names(groups_data)) {
+    if (verbose) cli::cli_inform("Merging 'post_data' with 'groups_data$post_data' by 'post_id'...\n")
+    groups_data$post_data <- post_data[groups_data$post_data, on = "post_id", nomatch = 0]
+    
+    # Join 'user_data' to 'post_data' by "account_id" (left join)
+    if (verbose) cli::cli_inform("Merging 'user_data' with 'groups_data$post_data' by 'account_id'...\n")
+    groups_data$post_data <- user_data[groups_data$post_data, on = "account_id", nomatch = 0]
+    
+    # Reorder columns in the desired order
+    desired_order <- c("post_id", 
+                       "time",
+                       "content",
+                       "account_id",
+                       "account_name",
+                       "community",
+                       "component",
+                       "algorithm",
+                       "parameters"
+    )
+    
+    # Combine the desired order with the remaining columns
+    remaining_columns <- setdiff(names(groups_data$post_data), desired_order)
+    new_column_order <- c(desired_order, remaining_columns)
+    
+    # Reorder the data.table columns
+    groups_data$post_data <- groups_data$post_data[, ..new_column_order]
+    
+    # Sample content
+    if(sample_content){
+      if (verbose) cli::cli_inform("Sampling {sample_n} posts from 'groups_data$post_data' per 'account_id'...\n")
+      set.seed(seed)
+      content_sample <- groups_data$post_data[, .(sampled_content = paste(sample(content, min(.N, sample_n)), collapse = sep)), by = account_id]
+    }
+    
+  }
+  
+  # Join 'user_data' to 'node_list' by "account_id" (left join)
+  if (verbose) cli::cli_inform("Merging 'user_data' with 'groups_data$node_list' by 'account_id'...\n")
+  groups_data$node_list <- user_data[groups_data$node_list, on = "account_id", nomatch = 0, verbose = F]
+  
+  if(sample_content){
+    if (verbose) cli::cli_inform("Merging {sample_n} sampled posts to 'groups_data$node_list' by 'account_id'...\n")
+    groups_data$node_list <- content_sample[groups_data$node_list, on = "account_id", nomatch = 0]
+  }
+  
+  # Reorder columns in the desired order
+  desired_order <- c("account_id",
+                     "account_name",
+                     "community",
+                     "component",
+                     "algorithm",
+                     "parameters"
+  )
+  
+  # Combine the desired order with the remaining columns
+  remaining_columns <- setdiff(names(groups_data$node_list), desired_order)
+  new_column_order <- c(desired_order, remaining_columns)
+  
+  # Reorder the data.table columns
+  groups_data$node_list <- groups_data$node_list[, ..new_column_order]
+  
+  # Return the augmented similarity table
+  return(groups_data)
+}
+
