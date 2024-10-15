@@ -164,8 +164,8 @@ augment_groups_data <- function(
     groups_data,
     post_data,
     user_data,
-    post_id = NULL, 
-    account_id = NULL, 
+    post_id = NULL,
+    account_id = NULL,
     content = NULL,
     other_post_vars = NULL,
     other_user_vars = NULL,
@@ -183,64 +183,69 @@ augment_groups_data <- function(
   if (!data.table::is.data.table(post_data)) post_data <- data.table::as.data.table(post_data)
   if (!data.table::is.data.table(user_data)) user_data <- data.table::as.data.table(user_data)
   
-  # Check and rename post_data columns
-  if (verbose) cli::cli_inform("Harmonizing 'post_data'...\n")
+  ## Copy data.tables
+  posts <- data.table::copy(post_data)
+  users <- data.table::copy(user_data)
+  
+  
+  # Check and rename posts columns
+  if (verbose) cli::cli_inform("Harmonizing 'posts'...\n")
   
   # Rename columns if alternative names are given and match
   post_col_renames <- list(post_id = post_id, content = content)
   for (col in names(post_col_renames)) {
     alt_name <- post_col_renames[[col]]
-    if (!is.null(alt_name) && alt_name %in% names(post_data)) {
-      data.table::setnames(post_data, alt_name, col)
+    if (!is.null(alt_name) && alt_name %in% names(posts)) {
+      data.table::setnames(posts, alt_name, col)
     }
   }
   
-  # Select relevant columns from post_data
+  # Select relevant columns from posts
   post_cols_to_keep <- c("post_id", "content", other_post_vars)
-  post_data <- post_data[, intersect(post_cols_to_keep, names(post_data)), with = FALSE]
+  posts <- posts[, intersect(post_cols_to_keep, names(posts)), with = FALSE]
   
-  ### De-duplicating post_data ###
-  if (any(duplicated(post_data$post_id))){
-    if (verbose) cat("De-duplicating 'post_data'...\n")
-    post_data <- post_data[!duplicated(post_data$post_id)]
+  ### De-duplicating posts ###
+  if (any(duplicated(posts$post_id))){
+    if (verbose) cat("De-duplicating 'posts'...\n")
+    posts <- posts[!duplicated(posts$post_id)]
   }
   
   
-  # Check and rename user_data columns
-  if (verbose) cli::cli_inform("Harmonizing 'user_data'...\n")
+  # Check and rename users columns
+  if (verbose) cli::cli_inform("Harmonizing 'users'...\n")
   
   user_col_renames <- list(account_id = account_id)
   for (col in names(user_col_renames)) {
     alt_name <- user_col_renames[[col]]
-    if (!is.null(alt_name) && alt_name %in% names(user_data)) {
-      data.table::setnames(user_data, alt_name, col)
+    if (!is.null(alt_name) && alt_name %in% names(users)) {
+      data.table::setnames(users, alt_name, col)
     }
   }
   
-  # Add prefix to user_data columns (except account_id)
+  # Add prefix to users columns (except account_id)
   user_cols_to_keep <- c("account_id", other_user_vars)
-  user_data <- user_data[, intersect(user_cols_to_keep, names(user_data)), with = FALSE]
-  user_cols <- setdiff(names(user_data), c("account_id"))
-  data.table::setnames(user_data, user_cols, paste0("account_", user_cols))
+  users <- users[, intersect(user_cols_to_keep, names(users)), with = FALSE]
+  user_cols <- setdiff(names(users), c("account_id"))
+  data.table::setnames(users, user_cols, paste0("account_", user_cols))
   
-  ### De-duplicating user_data ###
-  if (any(duplicated(user_data$user_id))){
-    if (verbose) cli::cli_inform("De-duplicating 'user_data'...\n")
-    user_data <- user_data[!duplicated(user_data$account_id)]
-  } 
+  ### De-duplicating users ###
+  if (any(duplicated(users$user_id))){
+    if (verbose) cli::cli_inform("De-duplicating 'users'...\n")
+    users <- users[!duplicated(users$account_id)]
+  }
   
   ### Merging process using data.table's direct join syntax ###
-  # Join 'post_data' to 'post_data' by "post_id" (left join)
+  # Join 'posts' to 'posts' by "post_id" (left join)
   if ("post_data" %in% names(groups_data)) {
     if (verbose) cli::cli_inform("Merging 'post_data' with 'groups_data$post_data' by 'post_id'...\n")
-    groups_data$post_data <- post_data[groups_data$post_data, on = "post_id", nomatch = 0]
+    groups_data$post_data <- posts[groups_data$post_data, on = "post_id", nomatch = 0]
     
-    # Join 'user_data' to 'post_data' by "account_id" (left join)
-    if (verbose) cli::cli_inform("Merging 'user_data' with 'groups_data$post_data' by 'account_id'...\n")
-    groups_data$post_data <- user_data[groups_data$post_data, on = "account_id", nomatch = 0]
+    # Join 'users' to 'post_data' by "account_id" (left join)
+    if (verbose) cli::cli_inform("Merging 'users' with 'groups_data$post_data' by 'account_id'...\n")
+    groups_data$post_data <- users[groups_data$post_data, on = "account_id", nomatch = 0]
     
     # Reorder columns in the desired order
-    desired_order <- c("post_id", 
+    desired_order <- c("post_id",
                        "time",
                        "content",
                        "account_id",
@@ -267,9 +272,9 @@ augment_groups_data <- function(
     
   }
   
-  # Join 'user_data' to 'node_list' by "account_id" (left join)
-  if (verbose) cli::cli_inform("Merging 'user_data' with 'groups_data$node_list' by 'account_id'...\n")
-  groups_data$node_list <- user_data[groups_data$node_list, on = "account_id", nomatch = 0, verbose = F]
+  # Join 'users' to 'node_list' by "account_id" (left join)
+  if (verbose) cli::cli_inform("Merging 'users' with 'groups_data$node_list' by 'account_id'...\n")
+  groups_data$node_list <- users[groups_data$node_list, on = "account_id", nomatch = 0, verbose = F]
   
   if(sample_content){
     if (verbose) cli::cli_inform("Merging {sample_n} sampled posts to 'groups_data$node_list' by 'account_id'...\n")
@@ -295,4 +300,3 @@ augment_groups_data <- function(
   # Return the augmented similarity table
   return(groups_data)
 }
-
