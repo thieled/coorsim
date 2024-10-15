@@ -187,7 +187,6 @@ augment_groups_data <- function(
   posts <- data.table::copy(post_data)
   users <- data.table::copy(user_data)
   
-  
   # Check and rename posts columns
   if (verbose) cli::cli_inform("Harmonizing 'posts'...\n")
   
@@ -200,14 +199,14 @@ augment_groups_data <- function(
     }
   }
   
-  # Select relevant columns from posts
+  # Selepostscript()# Select relevant columns from posts
   post_cols_to_keep <- c("post_id", "content", other_post_vars)
   posts <- posts[, intersect(post_cols_to_keep, names(posts)), with = FALSE]
   
   ### De-duplicating posts ###
-  if (any(duplicated(posts$post_id))){
+  if (any(duplicated(posts[["post_id"]]))){
     if (verbose) cat("De-duplicating 'posts'...\n")
-    posts <- posts[!duplicated(posts$post_id)]
+    posts <- posts[!duplicated(posts[["post_id"]])]
   }
   
   
@@ -229,20 +228,22 @@ augment_groups_data <- function(
   data.table::setnames(users, user_cols, paste0("account_", user_cols))
   
   ### De-duplicating users ###
-  if (any(duplicated(users$user_id))){
+  if (any(duplicated(users[["account_id"]]))){
     if (verbose) cli::cli_inform("De-duplicating 'users'...\n")
-    users <- users[!duplicated(users$account_id)]
+    users <- users[!duplicated(users[["account_id"]])]
   }
   
-  ### Merging process using data.table's direct join syntax ###
+  
+  ### Meusers_26### Merging process using data.table's direct join syntax ###
   # Join 'posts' to 'posts' by "post_id" (left join)
   if ("post_data" %in% names(groups_data)) {
     if (verbose) cli::cli_inform("Merging 'post_data' with 'groups_data$post_data' by 'post_id'...\n")
-    groups_data$post_data <- posts[groups_data$post_data, on = "post_id", nomatch = 0]
+    groups_data$post_data <- merge(x = groups_data$post_data, y = posts, by = "post_id", all.x = T)
+    
     
     # Join 'users' to 'post_data' by "account_id" (left join)
     if (verbose) cli::cli_inform("Merging 'users' with 'groups_data$post_data' by 'account_id'...\n")
-    groups_data$post_data <- users[groups_data$post_data, on = "account_id", nomatch = 0]
+    groups_data$post_data <- merge(x = groups_data$post_data, y = users, by = "account_id", all.x = T)
     
     # Reorder columns in the desired order
     desired_order <- c("post_id",
@@ -274,11 +275,12 @@ augment_groups_data <- function(
   
   # Join 'users' to 'node_list' by "account_id" (left join)
   if (verbose) cli::cli_inform("Merging 'users' with 'groups_data$node_list' by 'account_id'...\n")
-  groups_data$node_list <- users[groups_data$node_list, on = "account_id", nomatch = 0, verbose = F]
+  groups_data$node_list <- merge(x = groups_data$node_list, y = users, by = "account_id", all.x = T)
+  
   
   if(sample_content){
     if (verbose) cli::cli_inform("Merging {sample_n} sampled posts to 'groups_data$node_list' by 'account_id'...\n")
-    groups_data$node_list <- content_sample[groups_data$node_list, on = "account_id", nomatch = 0]
+    groups_data$node_list <- merge(x = groups_data$node_list, y = content_sample, by = "account_id", all.x = T)
   }
   
   # Reorder columns in the desired order
@@ -300,3 +302,4 @@ augment_groups_data <- function(
   # Return the augmented similarity table
   return(groups_data)
 }
+
