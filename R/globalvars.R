@@ -28,7 +28,8 @@ utils::globalVariables(c(".",
                          "name",
                          "community.x",
                          "community.y",
-                         "..new_column_order"))
+                         "..new_column_order",
+                         "nodes"))
 
 
 .datatable.aware <- TRUE

@@ -17,9 +17,12 @@ Imports:
     cli,
     data.table,
     ggplot2,
+    ggraph,
     igraph,
     lubridate,
     Rcpp (>= 1.0.12),
-    stats
+    stats,
+    tidygraph,
+    viridis
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 7.3.2
