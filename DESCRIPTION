@@ -16,12 +16,16 @@ Imports:
     assertthat,
     cli,
     data.table,
+    dplyr,
     ggplot2,
     ggraph,
+    ggrepel,
     igraph,
     lubridate,
+    magrittr,
     Rcpp (>= 1.0.12),
     stats,
+    stringr,
     tidygraph,
     viridis
 LinkingTo: Rcpp, RcppArmadillo

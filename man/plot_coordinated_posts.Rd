@@ -2,43 +2,60 @@
 % Please edit documentation in R/plotting.R
 \name{plot_coordinated_posts}
 \alias{plot_coordinated_posts}
-\title{Plot Coordinated Posts by Community and Time}
+\title{Plot Coordinated Posts of Communities}
 \usage{
 plot_coordinated_posts(
   network_data,
-  unit = "hour",
-  n_communities = NULL,
-  quantile = NULL,
-  param_info = NULL,
-  verbose = TRUE,
-  legend = TRUE,
-  title_prefix = NULL
+  by_communtiy = T,
+  unit = "6 hours",
+  component_size_threshold = NULL,
+  palette_option = "A",
+  start_color = 0,
+  end_color = 0.9,
+  title_prefix = NULL,
+  include_examples = T,
+  add_labels = F,
+  legend = T,
+  n_random_accounts = 3,
+  n_random_rows = 2,
+  seed = 42,
+  verbose = T
 )
 }
 \arguments{
-\item{network_data}{A list containing data.tables with network data, where `post_data` must be one of the elements.}
+\item{network_data}{A list containing at least a `post_data` data.table and an `igraph` graph object. Optionally, the list may include `labelled_communities` for community labels and `param_list` for metadata.}
 
-\item{unit}{Character string specifying the time unit for flooring dates, defaulting to `"hour"`. Accepts units recognized by `lubridate::floor_date`.}
+\item{by_communtiy}{Logical. If `TRUE`, the plot will display data grouped by community. If `FALSE`, the plot will display the overall activity.}
 
-\item{n_communities}{Integer specifying the number of top communities to plot. Defaults to `NULL`, in which case all communities are included.}
+\item{unit}{A string specifying the time unit for floor date rounding, e.g., `"6 hours"`. Passed to `lubridate::floor_date()`.}
 
-\item{quantile}{Numeric value between 0 and 1 specifying the quantile threshold for filtering communities by size. 
-Communities below this quantile threshold are excluded.}
+\item{component_size_threshold}{Integer. The minimum size of connected components to retain in the graph. Communities below this size are excluded from the plot.}
 
-\item{param_info}{Optional parameter info string that appears in the plot caption, providing context for the plot, such as parameter settings.}
+\item{palette_option}{A string specifying the color palette to use, passed to `viridis::viridis()`. Default is `"A"`.}
 
-\item{verbose}{Logical indicating whether to print status updates during execution. Defaults to `TRUE`.}
+\item{start_color}{Numeric. The starting value of the color gradient for the palette, between 0 and 1.}
 
-\item{legend}{Logical value indicating whether to display a legend for the plot. Defaults to `TRUE`.}
+\item{end_color}{Numeric. The ending value of the color gradient for the palette, between 0 and 1.}
 
-\item{title_prefix}{Optional character string used as a prefix for the plot title.}
+\item{title_prefix}{A string to prefix the plot title. Default is `NULL`.}
+
+\item{include_examples}{Logical. If `TRUE`, the plot includes examples of peak coordinated activity. Default is `TRUE`.}
+
+\item{add_labels}{Logical. If `TRUE`, the plot includes labels on the bars for each community's name and size. Default is `TRUE`.}
+
+\item{legend}{Logical. If `TRUE`, the plot includes a legend for the communities. Default is `TRUE`.}
+
+\item{n_random_accounts}{Integer. The number of random accounts per community to include in the examples, if `include_examples = TRUE`. Default is 3.}
+
+\item{n_random_rows}{Integer. The number of random rows to include in the examples per account. Default is 2.}
+
+\item{seed}{Integer. A seed for reproducibility of the random sampling of examples. Default is 42.}
+
+\item{verbose}{Logical. If `TRUE`, progress and information messages are printed. Default is `TRUE`.}
 }
 \value{
-A `ggplot` object visualizing the number of coordinated posts per community over time. 
-If `n_communities` is specified, the plot is limited to the top `n_communities` by size.
+A `ggplot2` object representing the coordinated posts of the communities.
 }
 \description{
-This function generates a plot of coordinated posts over time by community, with options to filter by the top `n` communities
-based on community size or post frequency. It utilizes a stacked bar chart to show the volume of posts per community, 
-aggregated by the specified time unit.
+This function generates a bar plot showing the coordinated posts of different communities over time. The plot can be configured to show the number of posts per community, with additional options to include labels or randomly sampled examples of peak coordinated activity for each community.
 }

@@ -29,7 +29,15 @@ utils::globalVariables(c(".",
                          "community.x",
                          "community.y",
                          "..new_column_order",
-                         "nodes"))
+                         "nodes",
+                         "acc_content",
+                         "account_name", 
+                         "community_label", 
+                         "content", 
+                         "examples",
+                         "label_generated", 
+                         "local_max", 
+                         "n_comm_posts"))
 
 
 .datatable.aware <- TRUE
