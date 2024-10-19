@@ -12,7 +12,8 @@ plot_communities(
   end_color = 1,
   start_color = 0,
   title_prefix = NULL,
-  n_top_nodes = 10
+  n_top_nodes = 10,
+  label.fontsize = c(8, 6)
 )
 }
 \arguments{
@@ -32,6 +33,8 @@ labelled communities (`$labelled_communities`), parameter list (`$param_list`), 
 \item{title_prefix}{Character. A prefix to be added to the title of the plot. Defaults to `NULL`.}
 
 \item{n_top_nodes}{Numeric. The number of top nodes by degree to display labels for within each community. Defaults to 10.}
+
+\item{label.fontsize}{Numeric vector. First value provides font size of label, second for description.}
 }
 \value{
 A `ggplot` object representing the plotted network graph with communities, node labels, and boundary highlights.

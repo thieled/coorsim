@@ -401,6 +401,7 @@ plot_coordinated_posts <- function(network_data,
 #' @param start_color Numeric. The start point for the color gradient (between 0 and 1). Defaults to 0.
 #' @param title_prefix Character. A prefix to be added to the title of the plot. Defaults to `NULL`.
 #' @param n_top_nodes Numeric. The number of top nodes by degree to display labels for within each community. Defaults to 10.
+#' @param label.fontsize Numeric vector. First value provides font size of label, second for description.
 #'
 #' @return A `ggplot` object representing the plotted network graph with communities, node labels, and boundary highlights.
 #' 
@@ -412,7 +413,8 @@ plot_communities <- function(network_data,
                              end_color = 1,
                              start_color = 0,
                              title_prefix = NULL,
-                             n_top_nodes = 10) {
+                             n_top_nodes = 10,
+                             label.fontsize = c(8,6)) {
   
   # Extract the graph and communities from the network object
   g <- network_data$graph
@@ -503,11 +505,11 @@ plot_communities <- function(network_data,
       dplyr::select(community, label = label_generated, desc = description_generated)
     
     comm_df <- dplyr::left_join(comm_stats_dt, comm_df) |> 
-      dplyr::mutate(community_label = paste0(community, " ", label, " \n [N nod.=", N, "]")) 
+      dplyr::mutate(community_label = paste0(community, " ", label, " [N=", N, "]")) 
     
   }else{
     # Generate label & empty desc
-    comm_df <- comm_stats_dt |> dplyr::mutate(community_label = paste0(community, " [N nod.=", N, "]")) 
+    comm_df <- comm_stats_dt |> dplyr::mutate(community_label = paste0(community, " [N=", N, "]")) 
     comm_df$desc = " "
   }
   
@@ -554,7 +556,7 @@ plot_communities <- function(network_data,
                    color = as.factor(community)),
       concavity = 2,
       alpha = 0.07,
-      label.fontsize = c(10, 8)) +
+      label.fontsize = label.fontsize) +
     # Add node labels for top 10 nodes per community
     ggraph::geom_node_text(
       data = layout |> dplyr::filter(account_name %in% top_nodes$account_name),  # Filter for top 10 nodes
@@ -577,64 +579,3 @@ plot_communities <- function(network_data,
 }
 
 
-#' Old v
-#' 
-#' #' Plot a Community Graph with Enhanced Visualization
-#' #'
-#' #' This function takes a network object with a graph and node list and 
-#' #' creates a community graph visualization. Nodes with degree <= 1 
-#' #' are removed, and the graph is further filtered based on edge weights 
-#' #' and component size. Community colors are assigned using the viridis palette.
-#' #'
-#' #' @param network_data A list containing an igraph graph, and a node_list as resulting from coorsim::detect_communities.
-#' #' @param edge_weight_threshold Numeric, the minimum weight for edges to be included in the plot.
-#' #' @param community_size_threshold Numeric, the minimum size of components to be included.
-#' #' @param palette_option Character, the viridis palette option for coloring communities (default is "A").
-#' #' @param end_color Numeric, the end value for color intensity in the viridis palette (default is 0.9).
-#' #'
-#' #' @return A ggplot2 object representing the community graph.
-#' #' @export
-#' #'
-#' #' 
-#' plot_communities <- function(network_data, 
-#'                                  edge_weight_threshold = 5, 
-#'                                  community_size_threshold = 5, 
-#'                                  palette_option = "A", 
-#'                                  end_color = 0.9) {
-#'   
-#'   # Extract the graph and communities from the network object
-#'   g <- network_data$graph
-#'   node_list <- network_data$node_list
-#'   
-#'   # Remove nodes with degree <= 1
-#'   g <- igraph::delete_vertices(g, which(igraph::degree(g) <= 1))
-#'   
-#'   # Keep only components with size >= community_size_threshold
-#'   g <- igraph::induced_subgraph(g, 
-#'                                 igraph::V(g)[igraph::components(g)$membership %in% 
-#'                                                which(igraph::components(g)$csize >= community_size_threshold)])
-#'   
-#'   # Filter edges based on weight
-#'   g <- igraph::subgraph.edges(g, igraph::E(g)[igraph::E(g)$weight > edge_weight_threshold])
-#'   
-#'   # Get unique communities and assign colors
-#'   unique_communities <- unique(node_list[node_list$account_id %in% igraph::V(g)$name]$community)
-#'   community_colors <- viridis::viridis(length(unique_communities), option = palette_option, end = end_color)
-#'   igraph::V(g)$color <- community_colors[match(igraph::V(g)$name, node_list$account_id)]
-#'   
-#'   # Convert graph to tidygraph format and join community information
-#'   tidy_g <- g |> 
-#'     tidygraph::as_tbl_graph()  |> 
-#'     tidygraph::activate(nodes) |> 
-#'     dplyr::left_join(node_list, by = c("name" = "account_id"))
-#'   
-#'   # Plot the graph with enhanced visualization
-#'   p <- ggraph::ggraph(tidy_g, layout = "stress") +
-#'     ggraph::geom_edge_link(ggplot2::aes(alpha = weight), color = "grey50", show.legend = FALSE) + 
-#'     ggraph::geom_node_point(ggplot2::aes(color = as.factor(community), size = igraph::degree(g, mode = "all")), show.legend = TRUE) + 
-#'     ggplot2::scale_color_manual(values = community_colors) + 
-#'     ggplot2::scale_alpha_continuous(range = c(0.2, 0.9)) + 
-#'     ggplot2::theme_void() 
-#'   
-#'   return(p)
-#' }
