@@ -17,6 +17,7 @@ Imports:
     cli,
     data.table,
     dplyr,
+    ggforce,
     ggplot2,
     ggraph,
     ggrepel,

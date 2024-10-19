@@ -2,33 +2,42 @@
 % Please edit documentation in R/plotting.R
 \name{plot_communities}
 \alias{plot_communities}
-\title{Plot a Community Graph with Enhanced Visualization}
+\title{Plot communities in a network graph}
 \usage{
 plot_communities(
   network_data,
-  edge_weight_threshold = 5,
-  community_size_threshold = 5,
+  edge_weight_threshold = NULL,
+  component_size_threshold = NULL,
   palette_option = "A",
-  end_color = 0.9
+  end_color = 1,
+  start_color = 0,
+  title_prefix = NULL,
+  n_top_nodes = 10
 )
 }
 \arguments{
-\item{network_data}{A list containing an igraph graph, and a node_list as resulting from coorsim::detect_communities.}
+\item{network_data}{A list containing the graph object (`$graph`) and node list (`$node_list`). Optionally, it can include 
+labelled communities (`$labelled_communities`), parameter list (`$param_list`), and filter information (`$filter_info`).}
 
-\item{edge_weight_threshold}{Numeric, the minimum weight for edges to be included in the plot.}
+\item{edge_weight_threshold}{Numeric. If provided, edges with a weight below this threshold will be removed. Defaults to `NULL`.}
 
-\item{community_size_threshold}{Numeric, the minimum size of components to be included.}
+\item{component_size_threshold}{Numeric. If provided, components smaller than this threshold will be removed. Defaults to `NULL`.}
 
-\item{palette_option}{Character, the viridis palette option for coloring communities (default is "A").}
+\item{palette_option}{Character. Specifies the Viridis palette option to use. Defaults to "A".}
 
-\item{end_color}{Numeric, the end value for color intensity in the viridis palette (default is 0.9).}
+\item{end_color}{Numeric. The end point for the color gradient (between 0 and 1). Defaults to 1.}
+
+\item{start_color}{Numeric. The start point for the color gradient (between 0 and 1). Defaults to 0.}
+
+\item{title_prefix}{Character. A prefix to be added to the title of the plot. Defaults to `NULL`.}
+
+\item{n_top_nodes}{Numeric. The number of top nodes by degree to display labels for within each community. Defaults to 10.}
 }
 \value{
-A ggplot2 object representing the community graph.
+A `ggplot` object representing the plotted network graph with communities, node labels, and boundary highlights.
 }
 \description{
-This function takes a network object with a graph and node list and 
-creates a community graph visualization. Nodes with degree <= 1 
-are removed, and the graph is further filtered based on edge weights 
-and component size. Community colors are assigned using the viridis palette.
+This function generates a plot of communities in a network graph using a stress layout. The graph
+is filtered based on component size and edge weight thresholds. Node colors and soft community boundaries 
+are assigned based on community membership, and node labels for the top nodes by degree are displayed.
 }

@@ -384,178 +384,35 @@ plot_coordinated_posts <- function(network_data,
 
 
 
- 
-# Old version: 
-#
-# plot_coordinated_posts <- function(network_data,
-#                                    unit = "hour",
-#                                    n_communities = NULL,
-#                                    quantile = NULL,
-#                                    param_info = NULL,
-#                                    verbose = TRUE,
-#                                    legend = TRUE,
-#                                    title_prefix = NULL
-# ) {
-#   
-#   if(!"post_data" %in% names(network_data)){
-#     stop("No 'post_data' provided in 'netword_data'. Unable to plot.")
-#   }
-#   
-#   # Create copy of dt
-#   dt <- data.table::copy(network_data$post_data)
-#   
-#   # Extract parameter info
-#   param_info <- paste(paste0("Parameters: ", param_info), 
-#                       paste0("COMM_ALG: ", network_data$node_list$algorithm[[1]]),
-#                       network_data$node_list$parameters[[1]], sep = "; "
-#   )
-#   filter_info <- NULL
-#   
-#   
-#   # Step 1: 
-#   if(!is.null(quantile)){
-#     
-#     # Calculate sizes of communities
-#     comm_size <- dt[, .(N = data.table::uniqueN(account_id)), by = community]
-#     
-#     keep_comm <- filter_ntile(comm_size, var_field = "N", probs = quantile)
-#     
-#     # How many are dropped
-#     orig_n <- comm_size[, .N]
-#     keep_n <- keep_comm[, .N]
-#     drop_n <- orig_n - keep_n
-#     
-#     # Subset
-#     dt <- dt[community %in% keep_comm$community, ]
-#     
-#     # Set n communities if null
-#     n_communities = keep_n
-#     
-#     pct <- paste0((1 - quantile)*100, "%")
-#     
-#     if(verbose)cli::cli_inform("Keeping top {pct}; n={keep_n} of lagrest communities (N members[{min(keep_comm$N)}, {max(keep_comm$N)}]).
-#                                Dropped n={drop_n} communities.")
-#     
-#     # Save filter info
-#     filter_info <- paste0("Largest ", pct, " of communities; n=", 
-#                           keep_n, 
-#                           "; Members: min=", min(keep_comm$N, na.rm = T),
-#                           ", max=", max(keep_comm$N, na.rm = T),
-#                           ", mean=", round(mean(keep_comm$N, na.rm = T),1),
-#                           "(", round(stats::sd(keep_comm$N, na.rm = T),1), ")."
-#     )
-#     
-#   }
-#   
-#   if(verbose)cli::cli_inform("Preparing post data.")
-#   
-#   # Step 1: Floor the 'time' column per hour and per day
-#   dt[, time_floored := lubridate::floor_date(time, unit = unit)]
-#   
-#   # Step 2: Calculate the number of observations per community and per floored time
-#   agg_data <- dt[, .N, by = .(community, time_floored)]
-#   
-#   # Step 3: Remove rows with NA in time_floored_hour or N (though likely .N won't produce NA)
-#   agg_data <- agg_data[!is.na(time_floored) & !is.na(N)]
-#   
-#   
-#   if(!is.null(n_communities)){
-#     
-#     # Step 1: Calculate the sum of N by community
-#     comm_size <- agg_data[, .(N = sum(N)), by = community]
-#     
-#     # Step 2: Get the top communities by total N
-#     keep_comm_i <- comm_size[order(-N)][1:n_communities, community]
-#     
-#     # Step 3: Filter agg_data to include only rows from the top communities
-#     keep_comm <- agg_data[community %in% keep_comm_i]
-#     
-#     
-#     # Store filter info
-#     if(is.null(quantile)){
-#       
-#       filter_info <- paste0("Members: min=", min(keep_comm$N, na.rm = T),
-#                             ", max=", max(keep_comm$N, na.rm = T),
-#                             ", mean=", round(mean(keep_comm$N, na.rm = T),1),
-#                             "(", round(stats::sd(keep_comm$N, na.rm = T),1), ")."
-#       )
-#     }
-#     
-#     
-#     # Step 6: Create a ggplot geom_bar plot, showing the number of observations per community per hour
-#     p <- keep_comm |> 
-#       ggplot2::ggplot(ggplot2::aes(x = time_floored, 
-#                                    y = N, 
-#                                    fill = factor(community))) +
-#       ggplot2::geom_bar(stat = "identity", position = "stack") +  # Stacked bar chart
-#       ggplot2::scale_x_datetime(breaks = "1 day", date_labels = "%b %d") +  # Adjust x-axis breaks and labels
-#       ggplot2::labs(title = paste0(paste(title_prefix, "Coordinated Posts of Largest n="), 
-#                                    n_communities, 
-#                                    " Communities."),
-#                     subtitle = filter_info,
-#                     caption = param_info,
-#                     y = "Number of Coordinated Posts",
-#                     x = "Time",
-#                     fill = "Community") +
-#       ggplot2::theme_minimal() +
-#       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, vjust = 1, hjust = 1))
-#     
-#     if(!legend) p <- p + ggplot2::theme(legend.position = "none")
-#     
-#   }else{
-#     
-#     member_info <- paste0("Members: min=", min(keep_comm$N, na.rm = T),
-#                           ", max=", max(keep_comm$N, na.rm = T),
-#                           ", mean=", round(mean(keep_comm$N, na.rm = T),1),
-#                           "(", round(stats::sd(keep_comm$N, na.rm = T),1), ")."
-#     )
-#     
-#     p <- agg_data |> 
-#       ggplot2::ggplot(ggplot2::aes(x = time_floored, 
-#                                    y = N)) +
-#       ggplot2::geom_bar(stat = "identity", position = "stack") +  # Stacked bar chart
-#       ggplot2::scale_x_datetime(breaks = "1 day", date_labels = "%b %d") +  # Adjust x-axis breaks and labels
-#       ggplot2::labs(title = paste0(paste(title_prefix, "Coordinated Posts Overall.")),
-#                     subtitle = member_info,
-#                     caption = param_info,
-#                     y = "Number of Coordinated Posts",
-#                     x = "Time") +
-#       ggplot2::theme_minimal() +
-#       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, vjust = 1, hjust = 1))
-#     
-#     
-#   }
-#   
-#   return(p)  
-# }
-# 
-# 
 
 
-
-
-#' Plot a Community Graph with Enhanced Visualization
+#' Plot communities in a network graph
 #'
-#' This function takes a network object with a graph and node list and 
-#' creates a community graph visualization. Nodes with degree <= 1 
-#' are removed, and the graph is further filtered based on edge weights 
-#' and component size. Community colors are assigned using the viridis palette.
+#' This function generates a plot of communities in a network graph using a stress layout. The graph
+#' is filtered based on component size and edge weight thresholds. Node colors and soft community boundaries 
+#' are assigned based on community membership, and node labels for the top nodes by degree are displayed.
 #'
-#' @param network_data A list containing an igraph graph, and a node_list as resulting from coorsim::detect_communities.
-#' @param edge_weight_threshold Numeric, the minimum weight for edges to be included in the plot.
-#' @param community_size_threshold Numeric, the minimum size of components to be included.
-#' @param palette_option Character, the viridis palette option for coloring communities (default is "A").
-#' @param end_color Numeric, the end value for color intensity in the viridis palette (default is 0.9).
+#' @param network_data A list containing the graph object (`$graph`) and node list (`$node_list`). Optionally, it can include 
+#' labelled communities (`$labelled_communities`), parameter list (`$param_list`), and filter information (`$filter_info`).
+#' @param edge_weight_threshold Numeric. If provided, edges with a weight below this threshold will be removed. Defaults to `NULL`.
+#' @param component_size_threshold Numeric. If provided, components smaller than this threshold will be removed. Defaults to `NULL`.
+#' @param palette_option Character. Specifies the Viridis palette option to use. Defaults to "A".
+#' @param end_color Numeric. The end point for the color gradient (between 0 and 1). Defaults to 1.
+#' @param start_color Numeric. The start point for the color gradient (between 0 and 1). Defaults to 0.
+#' @param title_prefix Character. A prefix to be added to the title of the plot. Defaults to `NULL`.
+#' @param n_top_nodes Numeric. The number of top nodes by degree to display labels for within each community. Defaults to 10.
 #'
-#' @return A ggplot2 object representing the community graph.
-#' @export
-#'
+#' @return A `ggplot` object representing the plotted network graph with communities, node labels, and boundary highlights.
 #' 
+#' @export
 plot_communities <- function(network_data, 
-                                 edge_weight_threshold = 5, 
-                                 community_size_threshold = 5, 
-                                 palette_option = "A", 
-                                 end_color = 0.9) {
+                             edge_weight_threshold = NULL, 
+                             component_size_threshold = NULL, 
+                             palette_option = "A", 
+                             end_color = 1,
+                             start_color = 0,
+                             title_prefix = NULL,
+                             n_top_nodes = 10) {
   
   # Extract the graph and communities from the network object
   g <- network_data$graph
@@ -565,31 +422,219 @@ plot_communities <- function(network_data,
   g <- igraph::delete_vertices(g, which(igraph::degree(g) <= 1))
   
   # Keep only components with size >= community_size_threshold
-  g <- igraph::induced_subgraph(g, 
-                                igraph::V(g)[igraph::components(g)$membership %in% 
-                                               which(igraph::components(g)$csize >= community_size_threshold)])
+  if(!is.null(component_size_threshold)){
+    g <- igraph::induced_subgraph(g, 
+                                  igraph::V(g)[igraph::components(g)$membership %in% 
+                                                 which(igraph::components(g)$csize >= component_size_threshold)])
+  }
   
   # Filter edges based on weight
-  g <- igraph::subgraph.edges(g, igraph::E(g)[igraph::E(g)$weight > edge_weight_threshold])
+  if(!is.null(edge_weight_threshold)){
+    g <- igraph::subgraph.edges(g, igraph::E(g)[igraph::E(g)$weight > edge_weight_threshold])
+  }
+  
+  # Extract filter and parameter information
+  if("param_list" %in% names(network_data)){
+    # Drop NULL or NA elements
+    param_list <- network_data$param_list[!sapply(network_data$param_list, function(x) is.null(x) || is.na(x))]
+    # Bind the list into a string "name1: value1; name2: value2"
+    param_string <- paste0("Parameters: ", paste0(names(param_list), ": ", unlist(param_list), collapse = "; "))
+  }else if("post_data" %in% names(network_data) && "parameters" %in% names(network_data$post_data)){
+    param_string <- paste0("Parameters: ", network_data$post_data$parameters[[1]])
+  }else{
+    param_string = paste0("Parameters: ", "NA")
+  }
+  
+  
+  if("filter_info" %in% names(network_data)){
+    # Drop NULL or NA elements
+    filter_info <- network_data$filter_info[!sapply(network_data$filter_info, function(x) is.null(x) || is.na(x))]
+    
+    # Rename "min_size" to "min_community_size"
+    if ("min_size" %in% names(filter_info)) {
+      names(filter_info)[names(filter_info) == "min_size"] <- "min_community_size"
+    }
+    
+  }else{
+    filter_info <- list()
+  }
+  
+  
+  # Add component size
+  if (!is.null(component_size_threshold)) {
+    if ("min_component_size" %in% names(filter_info)) {
+      filter_info[names(filter_info) == "min_component_size"] <- component_size_threshold
+    }
+    if (!"min_component_size" %in% names(filter_info)) {
+      filter_info <- append(filter_info, list(min_component_size = component_size_threshold))
+    }
+  }
+  
+  # Add edge weight filter
+  if (!is.null(edge_weight_threshold)) {
+    if ("edge_weight_threshold" %in% names(filter_info)) {
+      filter_info[names(filter_info) == "edge_weight_plot"] <- edge_weight_threshold
+    }
+    if (!"edge_weight_threshold" %in% names(filter_info)) {
+      filter_info <- append(filter_info, list(edge_weight_plot = edge_weight_threshold))
+    }
+  }
+  
+  # Bind the list into a string "name1: value1; name2: value2"
+  filter_string <- paste0("Filter (plot): ", paste0(names(filter_info), ": ", unlist(filter_info), collapse = "; "))
+  
   
   # Get unique communities and assign colors
-  unique_communities <- unique(node_list[node_list$account_id %in% igraph::V(g)$name]$community)
-  community_colors <- viridis::viridis(length(unique_communities), option = palette_option, end = end_color)
-  igraph::V(g)$color <- community_colors[match(igraph::V(g)$name, node_list$account_id)]
+  unique_communities <- unique(node_list[node_list$account_id %in% igraph::V(g)$name, ]$community)
+  community_colors <- viridis::viridis(length(unique_communities), option = palette_option, end = end_color, begin = start_color)
+  
+  # Calculate size attribute
+  igraph::V(g)$degree <- igraph::degree(g, mode = "all")
+  
+  
+  ### Create labels
+  
+  ## Community member size stats
+  comm_stats_dt <- node_list[node_list$account_id %in% igraph::V(g)$name, ][, .N, by = community]
+  
+  # Add community labels if available
+  if ("labelled_communities" %in% names(network_data)) {
+    comm_df <- network_data$labelled_communities |>
+      dplyr::select(community, label = label_generated, desc = description_generated)
+    
+    comm_df <- dplyr::left_join(comm_stats_dt, comm_df) |> 
+      dplyr::mutate(community_label = paste0(community, " ", label, " \n [N nod.=", N, "]")) 
+    
+  }else{
+    # Generate label & empty desc
+    comm_df <- comm_stats_dt |> dplyr::mutate(community_label = paste0(community, " [N nod.=", N, "]")) 
+    comm_df$desc = " "
+  }
   
   # Convert graph to tidygraph format and join community information
   tidy_g <- g |> 
-    tidygraph::as_tbl_graph()  |> 
+    tidygraph::as_tbl_graph() |> 
     tidygraph::activate(nodes) |> 
-    dplyr::left_join(node_list, by = c("name" = "account_id"))
+    dplyr::left_join(node_list, by = c("name" = "account_id"))  # Ensure you have account_id matching with name
   
-  # Plot the graph with enhanced visualization
-  p <- ggraph::ggraph(tidy_g, layout = "stress") +
-    ggraph::geom_edge_link(ggplot2::aes(alpha = weight), color = "grey50", show.legend = FALSE) + 
-    ggraph::geom_node_point(ggplot2::aes(color = as.factor(community), size = igraph::degree(g, mode = "all")), show.legend = TRUE) + 
-    ggplot2::scale_color_manual(values = community_colors) + 
-    ggplot2::scale_alpha_continuous(range = c(0.2, 0.9)) + 
-    ggplot2::theme_void() 
+  # Create a data frame with account names, degrees, and community memberships
+  node_degree_df <- tidy_g |> 
+    tidygraph::as_tibble() |>  # Convert to tibble
+    dplyr::select(account_name, degree, community)  # Use account_name instead of V(g)$name
+  
+  # Group by community, sort by degree in descending order, and select the top 10 nodes in each community
+  top_nodes <- node_degree_df |> 
+    dplyr::group_by(community) |> 
+    dplyr::arrange(community, desc(degree)) |> 
+    dplyr::slice_max(degree, n = n_top_nodes, with_ties = FALSE) |>  # Select top nodes by degree
+    dplyr::ungroup()
+  
+  # Compute the layout with ggraph
+  layout <- ggraph::create_layout(tidy_g, layout = "stress", bbox = 40)
+  
+  # Make sure the community column is present in layout
+  layout <- layout |> dplyr::left_join(comm_df, by = "community")  # Join the labels for each community
+  
+  # Create title
+  title <- paste0(ifelse(!is.null(title_prefix), paste(title_prefix, "Coordinated top communities of size >= "), "Coordinated top communities of size >= "), 
+                  component_size_threshold)
+  
+  # Plot the graph with ggraph
+  p <- ggraph::ggraph(layout) +
+    ggraph::geom_edge_link(ggplot2::aes(edge_linewidth = weight), color = "grey", show.legend = FALSE) + 
+    ggraph::geom_node_point(ggplot2::aes(color = as.factor(community), size = degree), show.legend = FALSE) +
+    # Draw soft boundary around each community
+    ggforce::geom_mark_hull(
+      ggplot2::aes(x = x, 
+                   y = y, 
+                   group = as.factor(community), 
+                   label = community_label, 
+                   description = desc, 
+                   fill = as.factor(community),
+                   color = as.factor(community)),
+      concavity = 2,
+      alpha = 0.07,
+      label.fontsize = c(10, 8)) +
+    # Add node labels for top 10 nodes per community
+    ggraph::geom_node_text(
+      data = layout |> dplyr::filter(account_name %in% top_nodes$account_name),  # Filter for top 10 nodes
+      ggplot2::aes(label = account_name,  size = log(degree)*10),  # Use account_name as label  # Adjust size if needed
+      repel = TRUE  # Avoid label overlap
+    ) +
+    ggplot2::scale_color_manual(values = community_colors) +
+    ggplot2::scale_fill_manual(values = community_colors, guide = "none") +
+    ggplot2::scale_alpha_continuous(range = c(0.1, 0.9)) +
+    ggraph::scale_edge_width(range = c(0.5, 5)) +
+    ggplot2::theme_void() +
+    ggplot2::theme(legend.position = "bottom") +
+    ggplot2::labs(title = title,
+                  subtitle = paste(param_string, filter_string),
+                  color = "Community") 
+  
+  
   
   return(p)
 }
+
+
+#' Old v
+#' 
+#' #' Plot a Community Graph with Enhanced Visualization
+#' #'
+#' #' This function takes a network object with a graph and node list and 
+#' #' creates a community graph visualization. Nodes with degree <= 1 
+#' #' are removed, and the graph is further filtered based on edge weights 
+#' #' and component size. Community colors are assigned using the viridis palette.
+#' #'
+#' #' @param network_data A list containing an igraph graph, and a node_list as resulting from coorsim::detect_communities.
+#' #' @param edge_weight_threshold Numeric, the minimum weight for edges to be included in the plot.
+#' #' @param community_size_threshold Numeric, the minimum size of components to be included.
+#' #' @param palette_option Character, the viridis palette option for coloring communities (default is "A").
+#' #' @param end_color Numeric, the end value for color intensity in the viridis palette (default is 0.9).
+#' #'
+#' #' @return A ggplot2 object representing the community graph.
+#' #' @export
+#' #'
+#' #' 
+#' plot_communities <- function(network_data, 
+#'                                  edge_weight_threshold = 5, 
+#'                                  community_size_threshold = 5, 
+#'                                  palette_option = "A", 
+#'                                  end_color = 0.9) {
+#'   
+#'   # Extract the graph and communities from the network object
+#'   g <- network_data$graph
+#'   node_list <- network_data$node_list
+#'   
+#'   # Remove nodes with degree <= 1
+#'   g <- igraph::delete_vertices(g, which(igraph::degree(g) <= 1))
+#'   
+#'   # Keep only components with size >= community_size_threshold
+#'   g <- igraph::induced_subgraph(g, 
+#'                                 igraph::V(g)[igraph::components(g)$membership %in% 
+#'                                                which(igraph::components(g)$csize >= community_size_threshold)])
+#'   
+#'   # Filter edges based on weight
+#'   g <- igraph::subgraph.edges(g, igraph::E(g)[igraph::E(g)$weight > edge_weight_threshold])
+#'   
+#'   # Get unique communities and assign colors
+#'   unique_communities <- unique(node_list[node_list$account_id %in% igraph::V(g)$name]$community)
+#'   community_colors <- viridis::viridis(length(unique_communities), option = palette_option, end = end_color)
+#'   igraph::V(g)$color <- community_colors[match(igraph::V(g)$name, node_list$account_id)]
+#'   
+#'   # Convert graph to tidygraph format and join community information
+#'   tidy_g <- g |> 
+#'     tidygraph::as_tbl_graph()  |> 
+#'     tidygraph::activate(nodes) |> 
+#'     dplyr::left_join(node_list, by = c("name" = "account_id"))
+#'   
+#'   # Plot the graph with enhanced visualization
+#'   p <- ggraph::ggraph(tidy_g, layout = "stress") +
+#'     ggraph::geom_edge_link(ggplot2::aes(alpha = weight), color = "grey50", show.legend = FALSE) + 
+#'     ggraph::geom_node_point(ggplot2::aes(color = as.factor(community), size = igraph::degree(g, mode = "all")), show.legend = TRUE) + 
+#'     ggplot2::scale_color_manual(values = community_colors) + 
+#'     ggplot2::scale_alpha_continuous(range = c(0.2, 0.9)) + 
+#'     ggplot2::theme_void() 
+#'   
+#'   return(p)
+#' }

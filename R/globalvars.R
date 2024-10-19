@@ -37,7 +37,13 @@ utils::globalVariables(c(".",
                          "examples",
                          "label_generated", 
                          "local_max", 
-                         "n_comm_posts"))
+                         "n_comm_posts",
+                         "degree", 
+                         "desc",
+                         "description_generated",
+                         "label",
+                         "y"
+                         ))
 
 
 .datatable.aware <- TRUE
