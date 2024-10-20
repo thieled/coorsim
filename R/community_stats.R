@@ -46,7 +46,7 @@ community_ei <- function(network_data,
     stop("No 'community' column found in 'network_data$node_list'.")
   }
   
-  if(!"node_list" %in% names(gloabl_network_data)){
+  if(!"node_list" %in% names(global_network_data)){
     stop("No 'node_list' found in 'network_data'.")
   }
   
@@ -110,3 +110,6 @@ community_ei <- function(network_data,
   return(comm_stats)
   
 }
+
+
+

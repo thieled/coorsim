@@ -223,3 +223,29 @@ subset_by_community_size <- function(network_data,
   }
   
 }
+
+
+#' Z-score Standardization
+#'
+#' This function performs Z-score standardization (also called normalization) on a numeric vector. 
+#' It scales the input data so that it has a mean of 0 and a standard deviation of 1.
+#'
+#' @param x A numeric vector to be standardized. Missing values (NA) will be ignored in the calculation.
+#'
+#' @return A numeric vector of the same length as `x`, where each value is standardized to have a mean of 0 
+#' and a standard deviation of 1. Any missing values (NA) in `x` are preserved.
+#'
+#' @details The function calculates the mean and standard deviation of the input vector, ignoring any 
+#' missing values (`NA`). It then subtracts the mean from each value and divides the result by the standard deviation.
+#' 
+#' @examples
+#' # Example usage
+#' x <- c(1, 2, 3, 4, 5)
+#' z_standardize(x)
+#' 
+#' @export
+z_standardize <- function(x) {
+  mu <- mean(x, na.rm = TRUE)
+  sigma <- stats::sd(x, na.rm = TRUE)
+  return((x - mu) / sigma)
+}
