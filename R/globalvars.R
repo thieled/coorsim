@@ -42,7 +42,12 @@ utils::globalVariables(c(".",
                          "desc",
                          "description_generated",
                          "label",
-                         "y"
+                         "y",
+                         "community_from",
+                         "community_to",
+                         "external_connections",
+                         "gloabl_network_data",
+                         "internal_connections"
                          ))
 
 
