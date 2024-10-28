@@ -25,6 +25,7 @@ Imports:
     lubridate,
     magrittr,
     Rcpp (>= 1.0.12),
+    rollama,
     stats,
     stringr,
     tidygraph,

@@ -47,7 +47,18 @@ utils::globalVariables(c(".",
                          "community_to",
                          "external_connections",
                          "gloabl_network_data",
-                         "internal_connections"
+                         "internal_connections",
+                         "account_description_clean", 
+                         "account_location_clean",
+                         "account_name_full_clean",
+                         "account_text_prep",
+                         "content_clean",
+                         "sampled_content",
+                         "all_accounts",
+                         "community_size",
+                         "message.content",
+                         "query_text",
+                         "split_text"
                          ))
 
 

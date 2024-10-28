@@ -124,9 +124,6 @@ subset_by_community_size <- function(network_data,
     # Subsetting by top n
     if(!is.null(n_communities)){
       
-      rm(comm_size)
-      rm(keep_comm)
-      
       # Calculate sizes of communities
       comm_size <- nodes_dt[, .N, by = community]
       
