@@ -67,7 +67,11 @@ plot_coordinated_posts <- function(network_data,
   g <- network_data$graph
   
   # Remove nodes with degree <= 1
-  g <- igraph::delete_vertices(g, which(igraph::degree(g) <= 1))
+  # g <- igraph::delete_vertices(g, which(igraph::degree(g) <= 1))
+  
+  # Simplify graph
+  g <- igraph::simplify(g, remove.multiple = TRUE, remove.loops = TRUE)
+  
   
   # Keep only components with size >= community_size_threshold
   if(!is.null(component_size_threshold)){
@@ -421,7 +425,11 @@ plot_communities <- function(network_data,
   node_list <- network_data$node_list
   
   # Remove nodes with degree <= 1
-  g <- igraph::delete_vertices(g, which(igraph::degree(g) <= 1))
+  # g <- igraph::delete_vertices(g, which(igraph::degree(g) <= 1))
+  
+  # Simplify
+  g <- igraph::simplify(g, remove.multiple = TRUE, remove.loops = TRUE)
+  
   
   # Keep only components with size >= community_size_threshold
   if(!is.null(component_size_threshold)){
