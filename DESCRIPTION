@@ -4,7 +4,7 @@ Title: Detects Coordinated Social Media Manipulation Based on Co-Similarity
 Version: 0.0.1.0
 Date: 2024-10-11
 Authors@R: 
-    person("Daniel", "Thiele", , "daniel.thiele@fu-berlin.de", role = c("cre", "aut"))
+    person("Anonymized", "Author", , "anon@university.edu", role = c("cre", "aut"))
 Description: R package for detection of Coordinated Social Media Manipulation (CSMM). 
     Detects sharing of highly similar content within short time windows, drawing on cosine similarity of content embeddings. 
     Implements the Focal Structure Algorithm Variant of Weber & Neumann (2021) to identify highly coordinated clusters of accounts. 
@@ -30,5 +30,7 @@ Imports:
     stringr,
     tidygraph,
     viridis
+Remotes: 
+    JBGruber/rollama
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 7.3.2
