@@ -58,7 +58,8 @@ utils::globalVariables(c(".",
                          "community_size",
                          "message.content",
                          "query_text",
-                         "split_text"
+                         "split_text",
+                         "get_text_embeddings"
                          ))
 
 
