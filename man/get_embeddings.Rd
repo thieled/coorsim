@@ -4,18 +4,12 @@
 \alias{get_embeddings}
 \title{Retrieve Text Embeddings Using Hugging Face Model via Python Script}
 \usage{
-get_embeddings(
-  text_data,
-  model_name = "twitter/twhin-bert-base",
-  python_path = NULL
-)
+get_embeddings(text_data, model_name = "twitter/twhin-bert-base")
 }
 \arguments{
 \item{text_data}{A data.frame with 'id' and 'text' columns.}
 
 \item{model_name}{The Hugging Face model to use for embeddings (default is "twitter/twhin-bert-base").}
-
-\item{python_path}{Optional. The path to the Python executable to be used by reticulate.}
 }
 \value{
 A data.frame with 'id' and the computed embeddings as additional columns.

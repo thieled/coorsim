@@ -24,6 +24,7 @@ Imports:
     igraph,
     lubridate,
     magrittr,
+    Matrix,
     methods,
     Rcpp (>= 1.0.12),
     reticulate,
