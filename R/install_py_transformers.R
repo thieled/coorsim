@@ -114,7 +114,7 @@ install_torch <- function(pytorch_cuda_url = "https://download.pytorch.org/whl/c
 #' based on CUDA availability. This ensures a seamless setup for using these libraries in R.
 #'
 #' @export
-transformers_install <- function(py_version = "3.11:latest",
+install_transformers <- function(py_version = "3.11:latest",
                                  ask = interactive(),
                                  force = FALSE,
                                  pytorch_cuda_url = "https://download.pytorch.org/whl/cu124",
@@ -181,12 +181,97 @@ transformers_install <- function(py_version = "3.11:latest",
     packages$version[packages$package == package]
   }
   
-  
   message("Successful installed torch ", 
           py_check_version("torch", envname = Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim")),
           " and transformers ",
-          py_check_version("torch", envname = Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim")),
+          py_check_version("transformers", envname = Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim")),
           ".")
   
   invisible(NULL)
+}
+
+
+
+
+
+#' Initialize Transformers and Torch in the Python Environment
+#'
+#' Initializes the `transformers` and `torch` libraries in the specified Python virtual environment. 
+#' This function checks for the required environment and packages, sources the necessary Python script, 
+#' and verifies that the libraries are correctly initialized.
+#'
+#' @details
+#' The function checks if the `transformers` and `torch` libraries have already been initialized.
+#' If they are, it reports the versions of both libraries and exits. If not, it ensures that a
+#' Python virtual environment specified by the \code{COORSIM_PYTHON} environment variable exists,
+#' contains the required libraries, and is properly configured. If any of these prerequisites are
+#' missing, the function raises an error.
+#' 
+#' The function also sources a Python script, \code{get_transformer_embeddings.py}, from the 
+#' \code{coorsim} package to enable further use of the initialized libraries.
+#' 
+#' To set up the environment and install the necessary libraries, use \code{install_transformers()}.
+#'
+#' @note
+#' The function sets the \code{"transformers_initialized"} option to \code{TRUE} upon successful
+#' initialization.
+#'
+#' @seealso \code{\link{install_transformers}}
+#'
+#' @export
+init_transformers <- function() {
+  
+  
+  py_check_version <- function(package, ...) {
+    packages <- reticulate::py_list_packages(...)
+    packages$version[packages$package == package]
+  }
+  
+  if (!is.null(options("transformers_initialized")$transformers_initialized)) {
+    
+    
+    transformers_v <- py_check_version("transformers", envname = Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim"))
+    torch_v <- py_check_version("torch", envname = Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim"))
+    
+    cli::cli_alert_info(
+      "transformers=={cli::style_italic(transformers_v)} and torch=={cli::style_italic(torch_v)} already initialized."
+    )
+    
+    return(NULL)
+  }
+  
+  if (!nchar(Sys.getenv("RETICULATE_PYTHON")) > 0) {
+    if (!reticulate::virtualenv_exists(Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim"))) 
+      stop("No coorsim environment found. Use `transformers_install()` to get started.")
+    
+    pckgs <- reticulate::py_list_packages(Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim"))
+    
+    if (!"transformers" %in% pckgs$package) 
+      stop("transformers was not found in your environment. Use `transformers_install()`",
+           "to get started.")
+    
+    reticulate::use_virtualenv(Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim"))
+    
+  }
+  
+  
+  reticulate::py_config()
+  
+  # Source py script
+  reticulate::source_python(system.file("python",
+                                        "get_transformer_embeddings.py",
+                                        package = "coorsim",
+                                        mustWork = TRUE
+  ))
+  
+  
+  transformers_v <- py_check_version("transformers", envname = Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim"))
+  torch_v <- py_check_version("torch", envname = Sys.getenv("COORSIM_PYTHON", unset = "r-coorsim"))
+  
+  cli::cli_alert_success(
+    "transformers=={cli::style_italic(transformers_v)} and torch=={cli::style_italic(torch_v)} initialized"
+  )
+  
+  options("transformers_initialized" = TRUE)
+  
 }
