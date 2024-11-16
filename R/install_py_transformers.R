@@ -15,11 +15,31 @@
 #' @export
 install_torch <- function(pytorch_cuda_url = "https://download.pytorch.org/whl/cu124") {
   
+  check_gpu <- function() {
+    if (.Platform$OS.type == "windows") {
+      # For Windows systems
+      gpu_info <- try(system("wmic path win32_VideoController get name", intern = TRUE), silent = TRUE)
+      gpu_detected <- any(grepl("NVIDIA", gpu_info, ignore.case = TRUE))
+    } else {
+      # For Unix-like systems (Linux/macOS) with nvidia-smi available
+      gpu_info <- try(system("nvidia-smi", intern = TRUE), silent = TRUE)
+      gpu_detected <- !inherits(gpu_info, "try-error") && length(gpu_info) > 0
+    }
+    
+    if (gpu_detected) {
+      return(TRUE)
+    } else {
+      return(FALSE)
+    }
+  }
+  
+  gpu_available <- check_gpu()
+  
   # Helper function to check for CUDA
   check_cuda <- function() {
     if (.Platform$OS.type == "windows") {
       cuda_check <- try(system("where nvcc", intern = TRUE), silent = TRUE)
-      cuda_available <- !inherits(cuda_check, "try-error") && length(cuda_check) > 0
+      cuda_available <- !inherits(cuda_check, "try-error") && any(grepl("CUDA", cuda_check, ignore.case = T) == TRUE)
     } else {
       cuda_check <- try(system("nvcc --version", intern = TRUE), silent = TRUE)
       cuda_available <- !inherits(cuda_check, "try-error") && any(grepl("release", cuda_check, ignore.case = TRUE))
@@ -27,8 +47,9 @@ install_torch <- function(pytorch_cuda_url = "https://download.pytorch.org/whl/c
     return(cuda_available)
   }
   
+  
   # Check CUDA availability
-  cuda_available <- check_cuda()
+  cuda_available <- check_cuda() & check_gpu()
   
   
   # Determine package source based on CUDA availability
