@@ -1,4 +1,8 @@
 
+### TO DO:
+### Use huggingface models and conda-coorsim infrastructure instead of rollama. 
+
+
 #' Prepare and Clean Account Texts
 #'
 #' This function processes account-related text data in a given `groups_data` object. It cleans post content, 
