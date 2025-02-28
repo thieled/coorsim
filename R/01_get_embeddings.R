@@ -1,6 +1,6 @@
 #' Retrieve Text Embeddings Using Hugging Face Model via Python Script
 #'
-#' @param text_data A data.frame with 'id' and 'text' columns.
+#' @param text_data A data.frame with 'post_id' and 'content' columns.
 #' @param model_name The Hugging Face model to use for embeddings (default is "twitter/twhin-bert-base").
 #' @param batch_size Integer. Batch size for processing texts (default is 32L).
 #' @param max_length Integer. Maximum sequence length for tokenization (default is 512L).
@@ -53,7 +53,7 @@ get_embeddings <- function(text_data,
   
   # Call the Python function with additional parameters for batch_size, max_length, and use_fp16
   embeddings <- reticulate::py$get_text_embeddings(
-    texts = text_data$text,
+    texts = text_data$content,
     model_name = model_name,
     batch_size = batch_size,
     max_length = max_length,
@@ -61,7 +61,7 @@ get_embeddings <- function(text_data,
   )
   
   embeddings_m <- Matrix::as.matrix(embeddings)
-  rownames(embeddings_m) <- text_data$id
+  rownames(embeddings_m) <- text_data$post_id
   
   return(embeddings_m)
 }
