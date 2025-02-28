@@ -2,8 +2,8 @@
 #'
 #' @param text_data A data.frame with 'id' and 'text' columns.
 #' @param model_name The Hugging Face model to use for embeddings (default is "twitter/twhin-bert-base").
-#' @param batch_size Batch size for processing texts (default is 32).
-#' @param max_length Maximum sequence length for tokenization (default is 512).
+#' @param batch_size Integer. Batch size for processing texts (default is 32L).
+#' @param max_length Integer. Maximum sequence length for tokenization (default is 512L).
 #' @param use_fp16 Logical, whether to use fp16 precision on GPU if available (default is FALSE).
 #' @param python_version Character. The Python version to install in the Conda environment.
 #' Defaults to `"3.13"`.
@@ -16,16 +16,16 @@
 #' @param ask Logical. If `TRUE`, prompts the user for confirmation before installing Miniconda.
 #' Defaults to `TRUE`.
 #' @param force Logical. If `TRUE`, forces reinstallation of dependencies even if they are already installed.
-#' Defaults to `FALSE`.
+#' Defaults to `TRUE`.
 #' @param verbose Logical. If `TRUE`, prints progress messages.
 #'
 #' @return A matrix with rownames corresponding to the 'id' column and computed embeddings as columns.
 #' @export
 get_embeddings <- function(text_data, 
                            model_name = "twitter/twhin-bert-base", 
-                           batch_size = 32, 
-                           max_length = 512, 
-                           use_fp16 = FALSE,
+                           batch_size = 32L, 
+                           max_length = 512L, 
+                           use_fp16 = TRUE,
                            
                            python_version = "3.13",
                            conda_path = NULL,
