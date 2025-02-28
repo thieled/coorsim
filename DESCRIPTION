@@ -32,7 +32,8 @@ Imports:
     stringr,
     tidygraph,
     viridis,
-    httr
+    httr,
+    rhdf5
 Remotes: 
     JBGruber/rollama
 LinkingTo: Rcpp, RcppArmadillo
