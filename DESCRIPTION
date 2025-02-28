@@ -25,14 +25,14 @@ Imports:
     lubridate,
     magrittr,
     Matrix,
-    methods,
     Rcpp (>= 1.0.12),
     reticulate,
     rollama,
     stats,
     stringr,
     tidygraph,
-    viridis
+    viridis,
+    httr
 Remotes: 
     JBGruber/rollama
 LinkingTo: Rcpp, RcppArmadillo

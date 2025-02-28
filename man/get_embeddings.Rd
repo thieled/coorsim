@@ -4,15 +4,54 @@
 \alias{get_embeddings}
 \title{Retrieve Text Embeddings Using Hugging Face Model via Python Script}
 \usage{
-get_embeddings(text_data, model_name = "twitter/twhin-bert-base")
+get_embeddings(
+  text_data,
+  model_name = "twitter/twhin-bert-base",
+  batch_size = 32,
+  max_length = 512,
+  use_fp16 = FALSE,
+  python_version = "3.13",
+  conda_path = NULL,
+  conda_env_path = NULL,
+  conda_env_name = "conda-coorsim",
+  ask = TRUE,
+  force = FALSE,
+  verbose = TRUE
+)
 }
 \arguments{
 \item{text_data}{A data.frame with 'id' and 'text' columns.}
 
 \item{model_name}{The Hugging Face model to use for embeddings (default is "twitter/twhin-bert-base").}
+
+\item{batch_size}{Batch size for processing texts (default is 32).}
+
+\item{max_length}{Maximum sequence length for tokenization (default is 512).}
+
+\item{use_fp16}{Logical, whether to use fp16 precision on GPU if available (default is FALSE).}
+
+\item{python_version}{Character. The Python version to install in the Conda environment.
+Defaults to `"3.13"`.}
+
+\item{conda_path}{Character. The path where Miniconda should be installed.
+If `NULL`, Miniconda is installed in the default location.}
+
+\item{conda_env_path}{Character. The path where the Conda environment should be created.
+If `NULL`, the environment is created in the default Conda environments directory.}
+
+\item{conda_env_name}{Character. The name of the Conda environment to create or use.
+Defaults to `"conda-coorsim"`.}
+
+\item{ask}{Logical. If `TRUE`, prompts the user for confirmation before installing Miniconda.
+Defaults to `TRUE`.}
+
+\item{force}{Logical. If `TRUE`, forces reinstallation of dependencies even if they are already installed.
+Defaults to `FALSE`.}
+
+\item{verbose}{Logical. If `TRUE`, prints progress messages.}
 }
 \value{
-A data.frame with 'id' and the computed embeddings as additional columns.
+A matrix with rownames corresponding to the 'id' column and computed embeddings as columns.
 }
 \description{
 Retrieve Text Embeddings Using Hugging Face Model via Python Script

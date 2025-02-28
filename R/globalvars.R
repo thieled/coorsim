@@ -59,7 +59,8 @@ utils::globalVariables(c(".",
                          "message.content",
                          "query_text",
                          "split_text",
-                         "get_text_embeddings"
+                         "get_text_embeddings",
+                         "vmessage"
                          ))
 
 
