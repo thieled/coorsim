@@ -35,7 +35,8 @@ Imports:
     httr,
     rhdf5
 Remotes: 
-    JBGruber/rollama
+    JBGruber/rollama,
+    grimbough/rhdf5
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 7.3.2
 Depends:
