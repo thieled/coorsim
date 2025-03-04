@@ -1,21 +1,22 @@
 #' Detect Communities of Coordinated Accounts
 #' 
 #' This function identifies communities of coordinated accounts in a co-similarity network. 
-#' It supports two community detection algorithms-the classic "Louvain" algorithme and the Focal Structures Algorithm "FSA_V"
-#' proposed by Weber & Neumann (2021), based on Sen et al. (2016). It can filter communities based on a minimum edge weight threshold.
+#' It supports two community detection algorithms—the classic "Louvain" algorithm, the "Leiden" algorithm, the "label_propagation" algorithm,
+#' and the Focal Structures Algorithm "FSA_V" proposed by Weber & Neumann (2021), based on Sen et al. (2016). 
+#' It can filter communities based on a minimum edge weight threshold and filter the network, and all other output by minimum community size.
 #' 
 #' @param simdt A `data.table` containing the network edges, with columns for account IDs 
 #'   (`account_id`, `account_id_y`) and optional columns for `post_id` and `time`.
 #' @param user_data A `data.table` of account-level data with at least one column for `account_id`. 
 #'   Additional columns can be specified to be included in the output.
-#' @param account_id Name of the column in `user_data` that identifies accounts. Defaults to `"account_id"`.
-#' @param account_name Name of the column in `user_data` for account names or labels. Defaults to `"account_name"`.
+#' @param account_id Name of the column in `user_data` that identifies accounts. Defaults to "account_id".
+#' @param account_name Name of the column in `user_data` for account names or labels. Defaults to "account_name".
 #' @param other_user_vars Optional character vector of additional column names in `user_data` 
 #'   to include in the output.
 #' @param edge_weight Optional numeric threshold for filtering the edge list. 
 #'   Only edges with a weight greater than or equal to this value will be included.
 #' @param cluster_method Character, the algorithm to use for community detection. 
-#'   Options are `"louvain"` or `"FSA_V"`. Defaults to `"FSA_V"`.
+#'   Options are "louvain", "leiden", "label_prop" or "FSA_V". Defaults to "label_prop".
 #' @param resolution Numeric resolution parameter for the Louvain algorithm. 
 #'   Controls the size of detected communities. Higher values create smaller communities. Defaults to `1`.
 #' @param theta Numeric, specifies the threshold for the FSA_V algorithm to control 
@@ -24,6 +25,8 @@
 #'   Defaults to `TRUE`.
 #' @param verbose Logical, whether to display progress messages. Defaults to `TRUE`.
 #' @param seed Numeric, the random seed to ensure reproducibility. Defaults to `42`.
+#' @param min_comm_size Integer. Minimum community size for filtering. Default is `NULL`.
+#' @param ... Additional parameters passed to the clustering functions.
 #' 
 #' @return A named list containing:
 #'   \describe{
@@ -41,12 +44,14 @@ coorsim_detect_groups <- function(simdt,
                                   account_name = "account_name",
                                   other_user_vars = NULL,
                                   edge_weight = NULL,
-                                  cluster_method = "FSA_V",
+                                  cluster_method = "label_prop",
                                   resolution = 1,
                                   theta = .3,
                                   return_post_dt = TRUE,
                                   verbose = TRUE,
-                                  seed = 42
+                                  seed = 42,
+                                  min_comm_size = NULL,
+                                  ...
 ) {
   
   # Step 1: Harmonizing user data
@@ -65,7 +70,7 @@ coorsim_detect_groups <- function(simdt,
   
   # Add prefix to user_data columns (except account_id)
   user_cols_to_keep <- c("account_id", "account_name", other_user_vars)
-  user_data <- user_data[, intersect(user_cols_to_keep, names(user_data)), with = FALSE]
+  user_data <- data.table::copy(user_data[, intersect(user_cols_to_keep, names(user_data)), with = FALSE])
   
   if(!is.null(other_user_vars)){
     user_cols <- setdiff(names(user_data), c("account_id", "account_name"))
@@ -119,19 +124,16 @@ coorsim_detect_groups <- function(simdt,
   if(verbose) cli::cli_progress_done()
   
   
+  
   # Step 5: Apply clustering based on the selected algorithm
   
   if(verbose)  cli::cli_progress_step("[4/5]: Finding communities.",
                                       msg_done = "[4/5]: Finding communities.")
   
-  if (cluster_method == "louvain") {
+  if (cluster_method == "label_prop") {
     
-    
-    set.seed(seed)
-    
-    # Apply louvan clustering algorithm
-    communities <- igraph::cluster_louvain(g, 
-                                           resolution = resolution)
+    # Apply cluster_label_propagation
+    communities <- igraph::cluster_label_prop(g, ...)
     
     # Extract membership igraph object
     membership <- igraph::membership(communities)
@@ -142,6 +144,50 @@ coorsim_detect_groups <- function(simdt,
                                   account_id = as.character(names(membership)), 
                                   community = membership),
                                 by = "account_id")
+    
+    node_membership_dt[, algorithm := cluster_method]
+    
+  } else if (cluster_method == "louvain") {
+    
+    set.seed(seed)
+    
+    # Apply louvan clustering algorithm
+    communities <- igraph::cluster_louvain(g, 
+                                           resolution = resolution,
+                                           ...)
+    
+    # Extract membership igraph object
+    membership <- igraph::membership(communities)
+    
+    # Create node membership datatable for export
+    node_membership_dt <- merge(node_list[match(igraph::V(g)$name, node_list$account_id)],
+                                data.table::data.table(
+                                  account_id = as.character(names(membership)), 
+                                  community = membership),
+                                by = "account_id")
+    
+    node_membership_dt[, algorithm := cluster_method]
+    
+    
+  } else if (cluster_method == "leiden") {
+    
+    set.seed(seed)
+    
+    # Apply louvan clustering algorithm
+    communities <- igraph::cluster_leiden(g, 
+                                          resolution = resolution,
+                                          ...)
+    
+    # Extract membership igraph object
+    membership <- igraph::membership(communities)
+    
+    # Create node membership datatable for export
+    node_membership_dt <- merge(node_list[match(igraph::V(g)$name, node_list$account_id)],
+                                data.table::data.table(
+                                  account_id = as.character(names(membership)), 
+                                  community = membership),
+                                by = "account_id")
+    
     node_membership_dt[, algorithm := cluster_method]
     
     
@@ -150,7 +196,10 @@ coorsim_detect_groups <- function(simdt,
     set.seed(seed) 
     
     # Louvain for initial clustering
-    communities <- igraph::cluster_louvain(g, resolution = resolution)
+    communities <- igraph::cluster_louvain(g, 
+                                           resolution = resolution,
+                                           ...)
+    
     membership <- igraph::membership(communities)
     community_edges <- data.table::as.data.table(igraph::as_data_frame(g, what = "edges"))
     community_edges <- merge(community_edges, 
@@ -199,52 +248,32 @@ coorsim_detect_groups <- function(simdt,
     # Step 3: Create a new graph based on the edges from FSA_V
     g_filtered <- igraph::graph_from_data_frame(fs_list[, .(from, to, weight)], directed = FALSE)
     
-    # Step 4: Re-run clustering on the filtered graph to assign final community labels
-    set.seed(seed)
-    fsa_communities <- igraph::cluster_louvain(g_filtered)
-    fsa_membership <- igraph::membership(fsa_communities)
+    # # Step 4: Re-run clustering by 'cluster_label_prop' on the filtered graph to assign final community labels
+    communities <- igraph::cluster_label_prop(g_filtered)
     
-    # Step 5: Map filtered graph communities back to original nodes
-    membership_dt <- data.table::data.table(
-      account_id = names(fsa_membership),
-      community = as.integer(fsa_membership)
-    )
+    # Extract membership igraph object
+    membership <- igraph::membership(communities)
     
-    # Step 6: Ensure that each account_id belongs to a unique community, removing any overlapping assignments
-    membership_dt <- unique(membership_dt, by = "account_id")
+    # Create node membership datatable for export
+    node_membership_dt <- merge(node_list[match(igraph::V(g_filtered)$name, node_list$account_id)],
+                                data.table::data.table(
+                                  account_id = as.character(names(membership)), 
+                                  community = membership),
+                                by = "account_id")
     
-    # Reassign final community to fs_list
-    fs_list <- merge(fs_list, membership_dt, by.x = "from", by.y = "account_id", all.x = TRUE)
+    node_membership_dt[, algorithm := cluster_method]
     
-    # Update the community column with final community labels
-    fs_list[, community := community.y]
-    fs_list[, community.x := NULL]
-    fs_list[, community.y := NULL]
-    
-    # Create component data table
-    components <- igraph::components(g)
-    component_memberships <- components$membership
-    component_ids <- names(components$membership)
-    component_dt <- data.table::data.table(
-      account_id = as.character(component_ids),
-      component = component_memberships
-    ) 
-    
-    # Merge component info
-    node_membership_dt <- merge(membership_dt, component_dt, by = "account_id", all.x = T)
-    
-    # Merge node list variables
-    node_membership_dt <- merge(node_membership_dt, node_list, by = "account_id", all.x = T)
+    # # Merge algorithm info
     node_membership_dt[, algorithm := cluster_method]
     node_membership_dt[, parameters := paste0("theta = ", theta, "; resolution = ", resolution)]
     
     # Store graph, edge list and communities object
-    communities <- fsa_communities
+    # communities <- fsa_communities
     g <- g_filtered
     edge_list <- fs_list[, .(account_id = from, account_id_y = to, weight, community)]
     
   } else {
-    stop("Invalid cluster_method. Choose 'louvain', 'infomap', or 'dbscan'.")
+    stop("Invalid cluster_method. Choose 'louvain', 'leiden', 'label_prop', or 'FSA_V'.")
   }
   
   
@@ -273,6 +302,44 @@ coorsim_detect_groups <- function(simdt,
     post_dt <- NULL
   }
   
+  ### Filter by community size
+  
+  if(!is.null(min_comm_size)){
+    
+    
+    if(verbose) cli::cli_progress_done()
+    
+    
+    if(verbose)  cli::cli_progress_step("Filtering by min_comm_size = {min_comm_size}).",
+                                        msg_done = "Filtered by min_comm_size = {min_comm_size}).")
+    
+    node_membership_dt <- node_membership_dt[
+      , .N, by = community][N > min_comm_size][
+        node_membership_dt, on = "community", nomatch = 0]
+    
+    # Define the set of valid account IDs
+    valid_accounts <- node_membership_dt$account_id
+    
+    # 1. Filter the igraph graph object `g`
+    g <- igraph::induced_subgraph(g, vids = igraph::V(g)[name %in% valid_accounts])
+    
+    # 2. Filter the igraph communities object `communities`
+    # Extract membership only for valid nodes
+    filtered_membership <- igraph::membership(communities)[names(igraph::membership(communities)) %in% valid_accounts]
+    # Recreate the community structure
+    communities <- igraph::make_clusters(g, filtered_membership)
+    
+    # 3. Filter the data.table `post_data`
+    if (!is.null(post_dt)) {
+      post_dt <- post_dt[account_id %in% valid_accounts]
+    }
+    
+    # 4. Filter the data.table `edge_list`
+    edge_list <- edge_list[account_id %in% valid_accounts & account_id_y %in% valid_accounts]
+    
+  }
+  
+  
   # Return the results as list
   result <- list(
     graph = g,
@@ -286,4 +353,3 @@ coorsim_detect_groups <- function(simdt,
   
   return(result)
 }
-

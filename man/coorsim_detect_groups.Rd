@@ -11,12 +11,14 @@ coorsim_detect_groups(
   account_name = "account_name",
   other_user_vars = NULL,
   edge_weight = NULL,
-  cluster_method = "FSA_V",
+  cluster_method = "label_prop",
   resolution = 1,
   theta = 0.3,
   return_post_dt = TRUE,
   verbose = TRUE,
-  seed = 42
+  seed = 42,
+  min_comm_size = NULL,
+  ...
 )
 }
 \arguments{
@@ -26,9 +28,9 @@ coorsim_detect_groups(
 \item{user_data}{A `data.table` of account-level data with at least one column for `account_id`. 
 Additional columns can be specified to be included in the output.}
 
-\item{account_id}{Name of the column in `user_data` that identifies accounts. Defaults to `"account_id"`.}
+\item{account_id}{Name of the column in `user_data` that identifies accounts. Defaults to "account_id".}
 
-\item{account_name}{Name of the column in `user_data` for account names or labels. Defaults to `"account_name"`.}
+\item{account_name}{Name of the column in `user_data` for account names or labels. Defaults to "account_name".}
 
 \item{other_user_vars}{Optional character vector of additional column names in `user_data` 
 to include in the output.}
@@ -37,7 +39,7 @@ to include in the output.}
 Only edges with a weight greater than or equal to this value will be included.}
 
 \item{cluster_method}{Character, the algorithm to use for community detection. 
-Options are `"louvain"` or `"FSA_V"`. Defaults to `"FSA_V"`.}
+Options are "louvain", "leiden", "label_prop" or "FSA_V". Defaults to "label_prop".}
 
 \item{resolution}{Numeric resolution parameter for the Louvain algorithm. 
 Controls the size of detected communities. Higher values create smaller communities. Defaults to `1`.}
@@ -51,6 +53,10 @@ Defaults to `TRUE`.}
 \item{verbose}{Logical, whether to display progress messages. Defaults to `TRUE`.}
 
 \item{seed}{Numeric, the random seed to ensure reproducibility. Defaults to `42`.}
+
+\item{min_comm_size}{Integer. Minimum community size for filtering. Default is `NULL`.}
+
+\item{...}{Additional parameters passed to the clustering functions.}
 }
 \value{
 A named list containing:
@@ -64,6 +70,7 @@ A named list containing:
 }
 \description{
 This function identifies communities of coordinated accounts in a co-similarity network. 
-It supports two community detection algorithms-the classic "Louvain" algorithme and the Focal Structures Algorithm "FSA_V"
-proposed by Weber & Neumann (2021), based on Sen et al. (2016). It can filter communities based on a minimum edge weight threshold.
+It supports two community detection algorithms—the classic "Louvain" algorithm, the "Leiden" algorithm, the "label_propagation" algorithm,
+and the Focal Structures Algorithm "FSA_V" proposed by Weber & Neumann (2021), based on Sen et al. (2016). 
+It can filter communities based on a minimum edge weight threshold and filter the network, and all other output by minimum community size.
 }
