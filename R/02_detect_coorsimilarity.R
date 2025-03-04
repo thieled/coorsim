@@ -102,7 +102,23 @@ detect_cosimilarity <- function(
   
   ### Step 3: Calculate similarities
   
-  # Check if embeddings are provided or not
+  
+  ## Option A: Check if 'embeddings' points to a valid .h5 file, if yes load it
+  
+      # Helper function to check if a valid .h5 file path is provided
+      is_h5file <- function(v) {
+        is.character(v) && file.exists(v) && grepl("\\.h5$", v, ignore.case = TRUE)
+      }
+  
+  if(is_h5file(embeddings)){
+    
+    embeddings = load_h5_embeddings(path = embeddings,
+                                    ids_subset = data$post_id,
+                                    verbose = verbose)
+    
+  }
+  
+  # Option B: No embeddings are provided - use word co-occurence similarity
   if(is.null(embeddings)){
     
     # Define function
@@ -166,6 +182,8 @@ detect_cosimilarity <- function(
       future::plan(future::sequential)
       
     }else{
+      
+      # Option C: Embeddings are provided.
       
       cli::cli_progress_step("[3/4]: Calculating similarities using sparse document-feature-matrixes.",
                              msg_done = "[3/4]: Calculated similarities using sparse document-feature-matrixes.")

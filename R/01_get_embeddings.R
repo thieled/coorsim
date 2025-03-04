@@ -342,3 +342,74 @@ save_embeddings <- function(data,
   rhdf5::H5close()
   
 }
+
+
+
+#' Load Embeddings from an HDF5 (.h5) File
+#'
+#' @description This function loads precomputed embeddings stored in an `.h5` file and retrieves only the relevant embeddings matching post IDs present in a dataset.
+#'
+#' @param path Character. Path to the `.h5` file containing embeddings.
+#' @param ids_subset Character. Vector of ids to subset the embedding matrix. Default is `NULL`.
+#' @param verbose Logical. If `TRUE`, displays progress messages. Default is `TRUE`.
+#'
+#' @details 
+#' The function checks whether the `.h5` file contains a `metadata/post_id` dataset and loads the corresponding embeddings for matching post IDs.
+#'
+#' @return A numeric matrix where rows correspond to post IDs and columns represent embedding dimensions. If no matching post IDs are found, returns `NULL`.
+#'
+#' @export
+load_h5_embeddings <- function(path, 
+                               ids_subset = NULL,
+                               verbose = T){
+  
+  # Helper function to check if a valid .h5 file path is provided
+  is_h5file <- function(v) {
+    is.character(v) && file.exists(v) && grepl("\\.h5$", v, ignore.case = TRUE)
+  }
+  
+  if (is_h5file(path)) {
+    
+    if(verbose) cli::cli_inform("Loading embeddings provided by .h5 file.")
+    
+    # Check if 'metadata/post_id' exists in the .h5 file
+    h5_contents <- rhdf5::h5ls(path)
+    
+    # Ensure 'metadata/post_id' exists by checking both group and name
+    metadata_exists <- any(h5_contents$group == "/metadata" & h5_contents$name == "post_id")
+    
+    if (!metadata_exists) {
+      stop("Embeddings provided as .h5 file but 'metadata/post_id' was not found. ",
+           "Please use 'coorsim::save_embeddings()' to retain a correct .h5 file.")
+    }
+    
+    # Load ids
+    ids <- rhdf5::h5read(path, "metadata/post_id")
+    
+    if(!is.null(ids_subset)){
+        
+          # Find indices matching the ids
+          indices <- which(ids %in% ids_subset)
+          
+          if (length(indices) == 0) {
+            return(NULL)  # No matching data
+          }
+          
+          # Load corresponding embeddings
+          m <- rhdf5::h5read(path, "embeddings", index = list(indices, NULL))
+          rownames(m) <- ids[indices]
+      
+        }else{
+      
+          m <- rhdf5::h5read(path, "embeddings")
+          rownames(m) <- ids
+          
+    }
+        
+    m <-  Matrix::as.matrix(m)
+    
+    return(m)
+    
+  }
+  
+}
