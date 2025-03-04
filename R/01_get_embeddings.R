@@ -1,7 +1,18 @@
 #' Retrieve Text Embeddings Using Hugging Face Model via Python Script
 #'
-#' @param text_data A data.frame with 'post_id' and 'content' columns.
-#' @param model_name The Hugging Face model to use for embeddings (default is "twitter/twhin-bert-base").
+#' @param data A `data.frame` or `data.table` containing the input text data.
+#' @param post_id Character. Column name in `data` containing unique post identifiers. If `NULL`, 
+#' the function attempts to detect it automatically.
+#' @param time Character. Column name in `data` containing timestamps. If `NULL`, the function 
+#' attempts to detect it automatically.
+#' @param content Character. Column name in `data` containing text content to embed. If `NULL`, 
+#' the function attempts to detect it automatically.
+#' @param model_name The Hugging Face model to use for embeddings (default is the CPU-friendly, multilingual model "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2").
+#' Other useful, more complex models to consider are, e.g.:
+#' \itemize{
+#'   \item Social-media specific, multilingual: "Twitter/twhin-bert-base"
+#'   \item Multilingual, lightweight model, trained on wikipedia: "distilbert/distilbert-base-multilingual-cased"
+#'   }
 #' @param batch_size Integer. Batch size for processing texts (default is 32L).
 #' @param max_length Integer. Maximum sequence length for tokenization (default is 512L).
 #' @param use_fp16 Logical, whether to use fp16 precision on GPU if available (default is FALSE).
@@ -21,9 +32,12 @@
 #'
 #' @return A matrix with rownames corresponding to the 'id' column and computed embeddings as columns.
 #' @export
-get_embeddings <- function(text_data, 
-                           model_name = "twitter/twhin-bert-base", 
-                           batch_size = 32L, 
+get_embeddings <- function(data,
+                           post_id = NULL, 
+                           time = NULL,
+                           content = NULL, 
+                           model_name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", 
+                           batch_size = 16L, 
                            max_length = 512L, 
                            use_fp16 = TRUE,
                            
@@ -36,6 +50,57 @@ get_embeddings <- function(text_data,
                            verbose = TRUE
                            
                            ) {
+  
+  # Assert that data is data frame or table
+  assertthat::assert_that(is.data.frame(data), msg =  
+                            "Please provide 'data' in data.frame or data.table format.")
+  
+  # Convert to data.table if data.frame
+  if (!data.table::is.data.table(data)) {
+    data <- data.table::as.data.table(data)
+  }
+  
+  # Define the required columns and their alternative names
+  required_columns <- c("post_id", 
+                        "time", 
+                        "content")
+  alternative_names <- list(post_id = post_id, 
+                            time = time, 
+                            content = content)
+  
+  # Create a logical vector to identify missing columns
+  missing_columns <- !required_columns %in% names(data)
+  
+  # Function to check and rename columns if missing
+  check_and_rename <- function(col) {
+    alt_name <- alternative_names[[col]]
+    assertthat::assert_that(!is.null(alt_name), 
+                            msg = paste("'", col, "' not specified and not found in 'data'.", sep = ""))
+    assertthat::assert_that(alt_name %in% names(data), 
+                            msg = paste("Alternative name for '", col, "' provided but not found in 'data'.", sep = ""))
+    data.table::setnames(data, old = alt_name, new = col)
+  }
+  
+  # Apply the function to missing columns
+  if (any(missing_columns)) {
+    invisible(lapply(required_columns[missing_columns], check_and_rename))
+  }
+  
+  # Subset the data table to these four columns
+  data <- data[, required_columns, with = FALSE]
+  
+  # Drop cuplicates of data
+  if(any(duplicated(data, by = "post_id"))){
+    warning("Duplicates in 'data' by 'post_id' detected and dropped.")
+    data <- unique(data, by = "post_id")
+  }
+  
+  # Converting the time variable to UNIX Timestamp
+  data[, time := as.numeric(as.POSIXct(time, tz = "UTC"))]
+  
+  # Sort by time
+  data <- data[order(time)]
+  
   
   # Check if conda-coorsim is initialized
   if (is.null(options("conda_coorsim_initialized")$conda_coorsim_initialized)){
@@ -53,7 +118,7 @@ get_embeddings <- function(text_data,
   
   # Call the Python function with additional parameters for batch_size, max_length, and use_fp16
   embeddings <- reticulate::py$get_text_embeddings(
-    texts = text_data$content,
+    texts = data$content,
     model_name = model_name,
     batch_size = batch_size,
     max_length = max_length,
@@ -61,7 +126,7 @@ get_embeddings <- function(text_data,
   )
   
   embeddings_m <- Matrix::as.matrix(embeddings)
-  rownames(embeddings_m) <- text_data$post_id
+  rownames(embeddings_m) <- data$post_id
   
   return(embeddings_m)
 }
@@ -157,61 +222,66 @@ save_embeddings <- function(data,
   
   # Step 1: Preprocessing
   
-  # Assert that data is data frame or table
-  assertthat::assert_that(is.data.frame(data), msg =  
-                            "Please provide 'data' in data.frame or data.table format.")
+  ### -> integrate in get_embeddings
   
-  # Convert to data.table if data.frame
-  if (!data.table::is.data.table(data)) {
-    data <- data.table::as.data.table(data)
-  }
-  
-  # Define the required columns and their alternative names
-  required_columns <- c("post_id", 
-                        "time", 
-                        "content")
-  alternative_names <- list(post_id = post_id, 
-                            time = time, 
-                            content = content)
-  
-  # Create a logical vector to identify missing columns
-  missing_columns <- !required_columns %in% names(data)
-  
-  # Function to check and rename columns if missing
-  check_and_rename <- function(col) {
-    alt_name <- alternative_names[[col]]
-    assertthat::assert_that(!is.null(alt_name), 
-                            msg = paste("'", col, "' not specified and not found in 'data'.", sep = ""))
-    assertthat::assert_that(alt_name %in% names(data), 
-                            msg = paste("Alternative name for '", col, "' provided but not found in 'data'.", sep = ""))
-    data.table::setnames(data, old = alt_name, new = col)
-  }
-  
-  # Apply the function to missing columns
-  if (any(missing_columns)) {
-    invisible(lapply(required_columns[missing_columns], check_and_rename))
-  }
-  
-  # Subset the data table to these four columns
-  data <- data[, required_columns, with = FALSE]
-  
-  # Drop cuplicates of data
-  if(any(duplicated(data, by = "post_id"))){
-    warning("Duplicates in 'data' by 'post_id' detected and dropped.")
-    data <- unique(data, by = "post_id")
-  }
-  
-  # Converting the time variable to UNIX Timestamp
-  data[, time := as.numeric(as.POSIXct(time, tz = "UTC"))]
-  
-  # Sort by time
-  data <- data[order(time)]
-  
+  # # Assert that data is data frame or table
+  # assertthat::assert_that(is.data.frame(data), msg =  
+  #                           "Please provide 'data' in data.frame or data.table format.")
+  # 
+  # # Convert to data.table if data.frame
+  # if (!data.table::is.data.table(data)) {
+  #   data <- data.table::as.data.table(data)
+  # }
+  # 
+  # # Define the required columns and their alternative names
+  # required_columns <- c("post_id", 
+  #                       "time", 
+  #                       "content")
+  # alternative_names <- list(post_id = post_id, 
+  #                           time = time, 
+  #                           content = content)
+  # 
+  # # Create a logical vector to identify missing columns
+  # missing_columns <- !required_columns %in% names(data)
+  # 
+  # # Function to check and rename columns if missing
+  # check_and_rename <- function(col) {
+  #   alt_name <- alternative_names[[col]]
+  #   assertthat::assert_that(!is.null(alt_name), 
+  #                           msg = paste("'", col, "' not specified and not found in 'data'.", sep = ""))
+  #   assertthat::assert_that(alt_name %in% names(data), 
+  #                           msg = paste("Alternative name for '", col, "' provided but not found in 'data'.", sep = ""))
+  #   data.table::setnames(data, old = alt_name, new = col)
+  # }
+  # 
+  # # Apply the function to missing columns
+  # if (any(missing_columns)) {
+  #   invisible(lapply(required_columns[missing_columns], check_and_rename))
+  # }
+  # 
+  # # Subset the data table to these four columns
+  # data <- data[, required_columns, with = FALSE]
+  # 
+  # # Drop cuplicates of data
+  # if(any(duplicated(data, by = "post_id"))){
+  #   warning("Duplicates in 'data' by 'post_id' detected and dropped.")
+  #   data <- unique(data, by = "post_id")
+  # }
+  # 
+  # # Converting the time variable to UNIX Timestamp
+  # data[, time := as.numeric(as.POSIXct(time, tz = "UTC"))]
+  # 
+  # # Sort by time
+  # data <- data[order(time)]
+  # 
   
   # Step 2: Retrieving embeddings
   
   # Get embeddings
-  emb_matrix <- get_embeddings(data, 
+  emb_matrix <- get_embeddings(data = data,
+                               post_id = post_id, 
+                               time = time,
+                               content = content, 
                                model_name = model_name, 
                                batch_size = batch_size, 
                                max_length = max_length, 

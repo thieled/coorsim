@@ -33,10 +33,16 @@ Imports:
     tidygraph,
     viridis,
     httr,
-    rhdf5
+    rhdf5,
+    furrr,
+    parallel,
+    future,
+    proxyC,
+    text2map,
+    pbapply
 Remotes: 
     JBGruber/rollama,
-    grimbough/rhdf5
+    bioc::release/rhdf5
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 7.3.2
 Depends:

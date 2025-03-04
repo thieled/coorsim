@@ -2,11 +2,11 @@
 % Please edit documentation in R/02_detect_coorsimilarity.R
 \name{coorsim_prepare_data}
 \alias{coorsim_prepare_data}
-\title{Prepare Data for Correlation Similarity Analysis}
+\title{Prepare Data for Co-Similarity Analysis}
 \usage{
 coorsim_prepare_data(
   data,
-  vector_matrix = NULL,
+  embeddings = NULL,
   time_window = 60,
   post_id = NULL,
   account_id = NULL,
@@ -16,27 +16,49 @@ coorsim_prepare_data(
 )
 }
 \arguments{
-\item{data}{A data frame or data table containing the posts data.}
+\item{data}{A `data.frame` or `data.table` containing post data. The table must include at least
+`post_id`, `account_id`, `time`, and `content`, either directly or via specified alternative column names.}
 
-\item{vector_matrix}{A matrix with vector represenations for social media items. The row names should correspond to post IDs.}
+\item{embeddings}{Embeddings for the posts, which can be provided in **three formats**:
+\itemize{
+  \item **A matrix**: Row names must correspond to `post_id` values.
+  \item **A valid `.h5` file path**: The file must contain a `metadata/post_id` dataset.
+  \item **NULL (default)**: No embeddings are used.
+}}
 
-\item{time_window}{An integer specifying the time window (in seconds) within which to detect similar posts. Default is 60.}
+\item{time_window}{Integer. The time window (in seconds) within which similar posts are detected. Default is `60`.}
 
-\item{post_id}{A character string representing the alternative name for the post ID column in the data (if not named "post_id").}
+\item{post_id}{Character. Alternative column name for `post_id`, if not present in `data`.}
 
-\item{account_id}{A character string representing the alternative name for the account ID column in the data (if not named "account_id").}
+\item{account_id}{Character. Alternative column name for `account_id`, if not present in `data`.}
 
-\item{time}{A character string representing the alternative name for the time column in the data (if not named "time").}
+\item{time}{Character. Alternative column name for `time`, if not present in `data`.}
 
-\item{content}{A character string representing the alternative name for the content column in the data (if not named "content").}
+\item{content}{Character. Alternative column name for `content`, if not present in `data`.}
 
-\item{verbose}{A logical value indicating whether to display progress messages. Default is TRUE.}
+\item{verbose}{Logical. If `TRUE`, displays progress messages. Default is `TRUE`.}
 }
 \value{
-A data table with the prepared data, including necessary transformations and subsetting.
+A processed `data.table` ready for correlation similarity analysis.
 }
 \description{
-This function prepares data for correlation similarity analysis by performing various checks and transformations 
-on the input data and vector matrix. It ensures that the necessary columns are present, converts data types, and 
-subsets the data as required.
+This function processes and prepares social media post data for correlation similarity analysis.
+It ensures that required columns are present, standardizes time formats, and optionally integrates
+embeddings either from an in-memory matrix or an `.h5` file.
+}
+\details{
+This function performs the following preprocessing steps:
+  \itemize{
+    \item Ensures that `post_id`, `account_id`, `time`, and `content` exist in `data`,
+          renaming alternative column names if provided.
+    \item Drops duplicate posts based on `post_id`.
+    \item Standardizes `time` to **Unix timestamps (UTC)** for cross-platform compatibility.
+    \item Sorts posts in ascending order by `time`.
+    \item If **embeddings are provided as a matrix**, retains only posts present in `rownames(embeddings)`.
+    \item If **embeddings are provided as an `.h5` file**, verifies that `metadata/post_id` exists
+          before extracting relevant post IDs.
+  }
+
+The function also filters out invalid time formats and ensures efficient memory usage by removing the `content` column
+from the final output.
 }

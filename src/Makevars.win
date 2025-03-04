@@ -17,4 +17,7 @@
 
 # Set include paths and flags for TBB
 PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -I$(TBB_HOME)/include
+#PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) -ltbb12 -fstack-protector -L"$(R_HOME)/bin/x64" -lRblas -lRlapack
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) -L$(TBB_HOME)/lib -ltbb12 -fstack-protector
+
+

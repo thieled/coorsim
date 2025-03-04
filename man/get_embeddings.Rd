@@ -5,9 +5,12 @@
 \title{Retrieve Text Embeddings Using Hugging Face Model via Python Script}
 \usage{
 get_embeddings(
-  text_data,
-  model_name = "twitter/twhin-bert-base",
-  batch_size = 32L,
+  data,
+  post_id = NULL,
+  time = NULL,
+  content = NULL,
+  model_name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  batch_size = 16L,
   max_length = 512L,
   use_fp16 = TRUE,
   python_version = "3.13",
@@ -20,9 +23,23 @@ get_embeddings(
 )
 }
 \arguments{
-\item{text_data}{A data.frame with 'post_id' and 'content' columns.}
+\item{data}{A `data.frame` or `data.table` containing the input text data.}
 
-\item{model_name}{The Hugging Face model to use for embeddings (default is "twitter/twhin-bert-base").}
+\item{post_id}{Character. Column name in `data` containing unique post identifiers. If `NULL`, 
+the function attempts to detect it automatically.}
+
+\item{time}{Character. Column name in `data` containing timestamps. If `NULL`, the function 
+attempts to detect it automatically.}
+
+\item{content}{Character. Column name in `data` containing text content to embed. If `NULL`, 
+the function attempts to detect it automatically.}
+
+\item{model_name}{The Hugging Face model to use for embeddings (default is the CPU-friendly, multilingual model "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2").
+Other useful, more complex models to consider are, e.g.:
+\itemize{
+  \item Social-media specific, multilingual: "Twitter/twhin-bert-base"
+  \item Multilingual, lightweight model, trained on wikipedia: "distilbert/distilbert-base-multilingual-cased"
+  }}
 
 \item{batch_size}{Integer. Batch size for processing texts (default is 32L).}
 
