@@ -24,6 +24,15 @@ You can install the development version of coorsim from
 devtools::install_github("thieled/coorsim")
 ```
 
+If the ‘rhdf5’ library is causing error, please first run:
+
+``` r
+if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+BiocManager::install("rhdf5")
+
+devtools::install_github("thieled/coorsim")
+```
+
 ## Example
 
 Below is an example of how to use coorsim to detect and analyze
@@ -37,7 +46,26 @@ Ensure a matrix of post embeddings is also available.
 ``` r
 posts <- readRDS("/path/to/file")
 users <- readRDS("/path/to/user_file")
-post_embedding_matrix <- readRDS("/path/to/embedding_file")
+```
+
+### Step 2: Get embeddings (optional)
+
+Next, we retrieve document embeddigs from transformer models. The
+function automatically installs and sets up a conda environment with the
+necessary libraries, if not yet present.
+
+This step can also be skipped – In that case, the detect_cosimilarity()
+function uses word-frequecies to compute similarites.
+
+``` r
+emb_matrix <- coorsim::get_embeddings(posts,
+                                  post_id = "tweet_id", 
+                                  time = "created_at",
+                                  content = "text",
+                                  batch_size = 16L, 
+                                  max_length = 512L, 
+                                  use_fp16 = T,
+                                  model_name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 ```
 
 ### Step 2: Detect Co-Similar Posts
