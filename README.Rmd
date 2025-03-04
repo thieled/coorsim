@@ -71,16 +71,16 @@ emb_matrix <- coorsim::get_embeddings(posts,
 ```
 
 
-### Step 2: Detect Co-Similar Posts
-Run co-similarity detection on posts within a 60-second timeframe and a cosine similarity threshold of 0.95.
+### Step 3: Detect Co-Similar Posts
+Run co-similarity detection on posts within a 60-second timeframe and a cosine similarity threshold of 0.9.
 
 ```{r similarity, eval=F}
 sim_dt <- coorsim::detect_cosimilarity(
   data = posts,
-  vector_matrix = post_embedding_matrix,
+  embeddings = post_embedding_matrix,
   time_window = 60,
-  min_simil = 0.95,
-  min_participation = 3,
+  min_simil = 0.9,
+  min_participation = 1,
   post_id = "tweet_id",
   account_id = "user_id",
   time = "created_at",
@@ -89,7 +89,10 @@ sim_dt <- coorsim::detect_cosimilarity(
 )
 ```
 
-### Step 3: Detect Communities
+### Step 4: Detect Communities
+
+[ NOTE: Package is under development from here on ... ]
+
 Identify communities of accounts using the FSA_V method to reveal groups with coordinated posting behavior.
 ```{r communities, eval=F}
 comm_dt <- coorsim::coorsim_detect_groups(
@@ -102,7 +105,7 @@ comm_dt <- coorsim::coorsim_detect_groups(
 )
 ```
 
-### Step 4: Prepare for Community Labeling
+### Step 5: Prepare for Community Labeling
 Sample post content and metadata to generate concise community labels.
 
 ```{r labelling_prep, eval=F}
@@ -114,7 +117,7 @@ comm_dt <- coorsim::prepare_community_texts(
 )
 ```
 
-### Step 5: Label Communities
+### Step 6: Label Communities
 Use a language model to generate labels for each identified community
 ```{r labelling, eval=F}
 instruction <- "Generate a concise label in English and a one-sentence description that summarizes the themes, tone, and regional focus of this community of Twitter users. The account names, locations, short bios, and sampled posts are provided below. Use '[LABEL:]' for the label and '[DESCRIPTION:]' for the description. Provide no additional output."
