@@ -4,12 +4,12 @@
 \alias{load_h5_embeddings}
 \title{Load Embeddings from an HDF5 (.h5) File}
 \usage{
-load_h5_embeddings(path, ids_subset = NULL, verbose = T)
+load_h5_embeddings(path, ids_subset = NULL, verbose = TRUE)
 }
 \arguments{
 \item{path}{Character. Path to the `.h5` file containing embeddings.}
 
-\item{ids_subset}{Character. Vector of ids to subset the embedding matrix. Default is `NULL`.}
+\item{ids_subset}{Character. Vector of IDs to subset the embedding matrix. Default is `NULL`.}
 
 \item{verbose}{Logical. If `TRUE`, displays progress messages. Default is `TRUE`.}
 }

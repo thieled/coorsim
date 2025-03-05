@@ -9,13 +9,14 @@ save_embeddings(
   post_id = NULL,
   time = NULL,
   content = NULL,
-  model_name = "twitter/twhin-bert-base",
+  model_name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
   batch_size = 32L,
   max_length = 512L,
   use_fp16 = TRUE,
   chunk_size = 512L,
   h5_fileprefix = "embeddings_",
   save_dir = NULL,
+  overwrite = TRUE,
   python_version = "3.13",
   conda_path = NULL,
   conda_env_path = NULL,
@@ -38,7 +39,7 @@ attempts to detect it automatically.}
 the function attempts to detect it automatically.}
 
 \item{model_name}{Character. Name of the transformer model to use for generating embeddings. 
-Defaults to `"twitter/twhin-bert-base"`.}
+Defaults to `"sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"`.}
 
 \item{batch_size}{Integer. Number of texts processed per batch when generating embeddings. 
 Defaults to `32L`.}
@@ -56,6 +57,8 @@ HDF5 file. Defaults to `512L`.}
 
 \item{save_dir}{Character. Directory where the HDF5 file will be saved. If `NULL`, defaults to the 
 working directory.}
+
+\item{overwrite}{Logical. Whether to overwrite an existing HDF5 file.}
 
 \item{python_version}{Character. The Python version to use when retrieving embeddings. Defaults to `"3.13"`.}
 

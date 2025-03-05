@@ -434,22 +434,25 @@ coorsim_prepare_data <- function(
   
   if (is_h5file(embeddings)) {
     
-    if(verbose) cli::cli_inform("Embeddings provided by .h5 file.")
+    if (verbose) cli::cli_inform("Embeddings provided by .h5 file.")
     
-    # Check if 'metadata/post_id' exists in the .h5 file
-    h5_contents <- rhdf5::h5ls(embeddings)
+    # Open the HDF5 file
+    h5 <- hdf5r::H5File$new(embeddings, mode = "r")
     
-    # Ensure 'metadata/post_id' exists by checking both group and name
-    metadata_exists <- any(h5_contents$group == "/metadata" & h5_contents$name == "post_id")
-    
-    if (!metadata_exists) {
+    # Check if 'metadata' group and 'post_id' dataset exist
+    if (!("metadata" %in% names(h5)) || !("post_id" %in% names(h5$open("metadata")))) {
+      h5$close_all()
       stop("Embeddings provided as .h5 file but 'metadata/post_id' was not found. ",
            "Please use 'coorsim::save_embeddings()' to retain a correct .h5 file.")
     }
     
     # Read post IDs
-    ids <- rhdf5::h5read(embeddings, "metadata/post_id")
+    ids <- h5$open("metadata/post_id")$read()
+    
+    # Close HDF5 file
+    h5$close_all()
   }
+  
   
   ### Option 3: No embeddings provided - do nothing
   if(is.null(embeddings)){

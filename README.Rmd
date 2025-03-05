@@ -30,14 +30,6 @@ devtools::install_github("thieled/coorsim")
 ```
 
 
-If the 'rhdf5' library is causing error, please first run:
-```{r, eval=F}
-if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-BiocManager::install("rhdf5")
-
-devtools::install_github("thieled/coorsim")
-```
-
 ## Example
 
 Below is an example of how to use coorsim to detect and analyze coordinated behavior in a set of Twitter data.

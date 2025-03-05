@@ -149,7 +149,7 @@ get_embeddings <- function(data,
 #' @param content Character. Column name in `data` containing text content to embed. If `NULL`, 
 #' the function attempts to detect it automatically.
 #' @param model_name Character. Name of the transformer model to use for generating embeddings. 
-#' Defaults to `"twitter/twhin-bert-base"`.
+#' Defaults to `"sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"`.
 #' @param batch_size Integer. Number of texts processed per batch when generating embeddings. 
 #' Defaults to `32L`.
 #' @param max_length Integer. Maximum token length for transformer-based embedding generation. 
@@ -161,6 +161,7 @@ get_embeddings <- function(data,
 #' @param h5_fileprefix Character. Prefix for the generated HDF5 filename. Defaults to `"embeddings_"`.
 #' @param save_dir Character. Directory where the HDF5 file will be saved. If `NULL`, defaults to the 
 #' working directory.
+#' @param overwrite Logical. Whether to overwrite an existing HDF5 file.
 #' @param python_version Character. The Python version to use when retrieving embeddings. Defaults to `"3.13"`.
 #' @param conda_path Character. The path to the Conda installation to use. If `NULL`, the function 
 #' attempts to detect an existing installation.
@@ -202,7 +203,7 @@ save_embeddings <- function(data,
                             post_id = NULL, 
                             time = NULL,
                             content = NULL,
-                            model_name = "twitter/twhin-bert-base",
+                            model_name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
                             batch_size = 32L,
                             max_length = 512L, 
                             use_fp16 = TRUE,
@@ -211,6 +212,7 @@ save_embeddings <- function(data,
                             
                             h5_fileprefix = "embeddings_",
                             save_dir = NULL,
+                            overwrite = TRUE,
                             
                             python_version = "3.13",
                             conda_path = NULL,
@@ -220,64 +222,7 @@ save_embeddings <- function(data,
                             force = FALSE,
                             verbose = TRUE){
   
-  # Step 1: Preprocessing
-  
-  ### -> integrate in get_embeddings
-  
-  # # Assert that data is data frame or table
-  # assertthat::assert_that(is.data.frame(data), msg =  
-  #                           "Please provide 'data' in data.frame or data.table format.")
-  # 
-  # # Convert to data.table if data.frame
-  # if (!data.table::is.data.table(data)) {
-  #   data <- data.table::as.data.table(data)
-  # }
-  # 
-  # # Define the required columns and their alternative names
-  # required_columns <- c("post_id", 
-  #                       "time", 
-  #                       "content")
-  # alternative_names <- list(post_id = post_id, 
-  #                           time = time, 
-  #                           content = content)
-  # 
-  # # Create a logical vector to identify missing columns
-  # missing_columns <- !required_columns %in% names(data)
-  # 
-  # # Function to check and rename columns if missing
-  # check_and_rename <- function(col) {
-  #   alt_name <- alternative_names[[col]]
-  #   assertthat::assert_that(!is.null(alt_name), 
-  #                           msg = paste("'", col, "' not specified and not found in 'data'.", sep = ""))
-  #   assertthat::assert_that(alt_name %in% names(data), 
-  #                           msg = paste("Alternative name for '", col, "' provided but not found in 'data'.", sep = ""))
-  #   data.table::setnames(data, old = alt_name, new = col)
-  # }
-  # 
-  # # Apply the function to missing columns
-  # if (any(missing_columns)) {
-  #   invisible(lapply(required_columns[missing_columns], check_and_rename))
-  # }
-  # 
-  # # Subset the data table to these four columns
-  # data <- data[, required_columns, with = FALSE]
-  # 
-  # # Drop cuplicates of data
-  # if(any(duplicated(data, by = "post_id"))){
-  #   warning("Duplicates in 'data' by 'post_id' detected and dropped.")
-  #   data <- unique(data, by = "post_id")
-  # }
-  # 
-  # # Converting the time variable to UNIX Timestamp
-  # data[, time := as.numeric(as.POSIXct(time, tz = "UTC"))]
-  # 
-  # # Sort by time
-  # data <- data[order(time)]
-  # 
-  
-  # Step 2: Retrieving embeddings
-  
-  # Get embeddings
+  # Step 1: Retrieving embeddings
   emb_matrix <- get_embeddings(data = data,
                                post_id = post_id, 
                                time = time,
@@ -294,53 +239,41 @@ save_embeddings <- function(data,
                                force = force,
                                verbose = verbose)
   
-  # Step 3: Store embeddings as .h5 file
-  
-  # Store ids
+  # Step 2: Store embeddings as .h5 file
   post_id <- as.character(data$post_id)
-  
-  # Store timestamps
   time <- data$time
   
-  
-  # Save dir
   if(is.null(save_dir)) save_dir <- getwd()
-  if(!dir.exists(save_dir)) dir.create(save_dir, recursive = T, showWarnings = F)
+  if(!dir.exists(save_dir)) dir.create(save_dir, recursive = TRUE, showWarnings = FALSE)
   
-  # Construct h5 filename
   h5_filename <- paste0(h5_fileprefix,
                         stringr::str_replace_all(string = basename(model_name), "[:punct:]", "-"),
                         ".h5")
-  
   h5_file <- file.path(save_dir, h5_filename)
   
-  # Create and write to h5 file using rhdf5
-  rhdf5::h5createFile(h5_file)
+  # Handle overwrite condition
+  if (file.exists(h5_file) && !overwrite) {
+    stop("HDF5 file already exists and overwrite is set to FALSE.")
+  }
   
-  # Calculate number of chunks
-  num_chunks <- ceiling(nrow(data) / chunk_size)
+  # Create HDF5 file using hdf5r
+  h5 <- hdf5r::H5File$new(h5_file, mode = "w")
   
-  # Extract metadata
-  rhdf5::h5createGroup(h5_file, "metadata")
-  rhdf5::h5write(data$time, h5_file, "metadata/time")  # Store time as a dataset
-  rhdf5::h5write(data$post_id, h5_file, "metadata/post_id")  # Store post IDs
+  # Create metadata group
+  meta_group <- h5$create_group("metadata")
+  meta_group$create_dataset("time", robj = time)
+  meta_group$create_dataset("post_id", robj = post_id)
   
-  # Create dataset with chunking
-  rhdf5::h5createDataset(
-    file = h5_file,
-    dataset = "embeddings",
-    dims = dim(emb_matrix),
-    chunk = c(chunk_size, ncol(emb_matrix)),
-    storage.mode = "double",
-    level = 0  # Optional compression
+  # Create dataset for embeddings with chunking
+  h5$create_dataset(
+    name = "embeddings",
+    robj = emb_matrix,
+    chunk_dims = c(min(chunk_size, nrow(emb_matrix)), ncol(emb_matrix)),
+    dtype = hdf5r::h5types$H5T_NATIVE_DOUBLE
   )
   
-  # Write embeddings to HDF5
-  rhdf5::h5write(emb_matrix, h5_file, "embeddings")
-  
-  # Close HDF5 file
-  rhdf5::H5close()
-  
+  # Close the HDF5 file
+  h5$close_all()
 }
 
 
@@ -350,7 +283,7 @@ save_embeddings <- function(data,
 #' @description This function loads precomputed embeddings stored in an `.h5` file and retrieves only the relevant embeddings matching post IDs present in a dataset.
 #'
 #' @param path Character. Path to the `.h5` file containing embeddings.
-#' @param ids_subset Character. Vector of ids to subset the embedding matrix. Default is `NULL`.
+#' @param ids_subset Character. Vector of IDs to subset the embedding matrix. Default is `NULL`.
 #' @param verbose Logical. If `TRUE`, displays progress messages. Default is `TRUE`.
 #'
 #' @details 
@@ -361,55 +294,59 @@ save_embeddings <- function(data,
 #' @export
 load_h5_embeddings <- function(path, 
                                ids_subset = NULL,
-                               verbose = T){
+                               verbose = TRUE) {
   
   # Helper function to check if a valid .h5 file path is provided
   is_h5file <- function(v) {
     is.character(v) && file.exists(v) && grepl("\\.h5$", v, ignore.case = TRUE)
   }
   
-  if (is_h5file(path)) {
-    
-    if(verbose) cli::cli_inform("Loading embeddings provided by .h5 file.")
-    
-    # Check if 'metadata/post_id' exists in the .h5 file
-    h5_contents <- rhdf5::h5ls(path)
-    
-    # Ensure 'metadata/post_id' exists by checking both group and name
-    metadata_exists <- any(h5_contents$group == "/metadata" & h5_contents$name == "post_id")
-    
-    if (!metadata_exists) {
-      stop("Embeddings provided as .h5 file but 'metadata/post_id' was not found. ",
-           "Please use 'coorsim::save_embeddings()' to retain a correct .h5 file.")
-    }
-    
-    # Load ids
-    ids <- rhdf5::h5read(path, "metadata/post_id")
-    
-    if(!is.null(ids_subset)){
-        
-          # Find indices matching the ids
-          indices <- which(ids %in% ids_subset)
-          
-          if (length(indices) == 0) {
-            return(NULL)  # No matching data
-          }
-          
-          # Load corresponding embeddings
-          m <- rhdf5::h5read(path, "embeddings", index = list(indices, NULL))
-          rownames(m) <- ids[indices]
-      
-        }else{
-      
-          m <- rhdf5::h5read(path, "embeddings")
-          rownames(m) <- ids
-          
-    }
-        
-    m <-  Matrix::as.matrix(m)
-    
-    return(m)
-    
+  if (!is_h5file(path)) {
+    stop("Invalid HDF5 file path provided.")
   }
   
+  if (verbose) cli::cli_inform("Loading embeddings from the .h5 file.")
+  
+  # Open the HDF5 file
+  h5 <- hdf5r::H5File$new(path, mode = "r")
+  
+  # Check if metadata group exists
+  if (!"metadata" %in% names(h5)) {
+    h5$close_all()
+    stop("Embeddings provided as .h5 file but 'metadata' group was not found. ",
+         "Please use 'coorsim::save_embeddings()' to retain a correct .h5 file.")
+  }
+  
+  metadata_group <- h5$open("metadata")
+  
+  # Check if post_id dataset exists
+  if (!"post_id" %in% names(metadata_group)) {
+    h5$close_all()
+    stop("Embeddings provided as .h5 file but 'metadata/post_id' was not found. ",
+         "Please use 'coorsim::save_embeddings()' to retain a correct .h5 file.")
+  }
+  
+  # Load post IDs
+  ids <- metadata_group$open("post_id")$read()
+  
+  if (!is.null(ids_subset)) {
+    # Find indices matching the ids
+    indices <- which(ids %in% ids_subset)
+    
+    if (length(indices) == 0) {
+      h5$close_all()
+      return(NULL)  # No matching data
+    }
+    
+    # Load corresponding embeddings
+    m <- h5$open("embeddings")$read(args = list(indices, NULL))
+    rownames(m) <- ids[indices]
+  } else {
+    m <- h5$open("embeddings")$read()
+    rownames(m) <- ids
+  }
+  
+  h5$close_all()
+  
+  return(Matrix::as.matrix(m))
 }
