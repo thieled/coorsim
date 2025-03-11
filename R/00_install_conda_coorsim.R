@@ -27,7 +27,9 @@
 #' and verifying PyTorch.
 #'
 #' @export
-install_torch <- function(python_path = NULL, conda_env = NULL, verbose = TRUE) {
+install_torch <- function(python_path = NULL, 
+                          conda_env = NULL,
+                          verbose = TRUE) {
   
   # Helper function for printing messages only when verbose = TRUE
   vmessage <- function(...) {

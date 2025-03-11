@@ -292,9 +292,12 @@ coorsim_detect_groups <- function(simdt,
     post_dt <- data.table::melt(simdt, 
                                 measure.vars = list(post_id = c("post_id", "post_id_y"), 
                                                     account_id = c("account_id", "account_id_y"),
-                                                    time = c("time", "time_y")))
+                                                    time = c("time", "time_y"),
+                                                    content = c("content", "content_y")
+                                ))
+    
     # Remove duplicates to get unique post_id and account_id pairs
-    post_dt <- unique(post_dt[, .(post_id, account_id, time)])
+    post_dt <- unique(post_dt[, .(post_id, account_id, time, content)])
     
     # Join community info
     post_dt <- post_dt[node_membership_dt, on = .(account_id)]
@@ -337,6 +340,10 @@ coorsim_detect_groups <- function(simdt,
     # 4. Filter the data.table `edge_list`
     edge_list <- edge_list[account_id %in% valid_accounts & account_id_y %in% valid_accounts]
     
+    # 5. Filter simdt
+    simdt <- simdt[account_id %in% valid_accounts & account_id_y %in% valid_accounts]
+    
+    
   }
   
   
@@ -345,6 +352,7 @@ coorsim_detect_groups <- function(simdt,
     graph = g,
     communities = communities,
     edge_list = edge_list,
+    sim_dt = simdt,
     node_list = node_membership_dt,
     post_data = post_dt
   )
