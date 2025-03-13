@@ -222,22 +222,72 @@ save_embeddings <- function(data,
                             force = FALSE,
                             verbose = TRUE){
   
+  # Assert that data is data frame or table
+  assertthat::assert_that(is.data.frame(data), msg =  
+                            "Please provide 'data' in data.frame or data.table format.")
+  
+  # Convert to data.table if data.frame
+  if (!data.table::is.data.table(data)) {
+    data <- data.table::as.data.table(data)
+  }
+  
+  # Define the required columns and their alternative names
+  required_columns <- c("post_id", 
+                        "time", 
+                        "content")
+  alternative_names <- list(post_id = post_id, 
+                            time = time, 
+                            content = content)
+  
+  # Create a logical vector to identify missing columns
+  missing_columns <- !required_columns %in% names(data)
+  
+  # Function to check and rename columns if missing
+  check_and_rename <- function(col) {
+    alt_name <- alternative_names[[col]]
+    assertthat::assert_that(!is.null(alt_name), 
+                            msg = paste("'", col, "' not specified and not found in 'data'.", sep = ""))
+    assertthat::assert_that(alt_name %in% names(data), 
+                            msg = paste("Alternative name for '", col, "' provided but not found in 'data'.", sep = ""))
+    data.table::setnames(data, old = alt_name, new = col)
+  }
+  
+  # Apply the function to missing columns
+  if (any(missing_columns)) {
+    invisible(lapply(required_columns[missing_columns], check_and_rename))
+  }
+  
+  # Subset the data table to these four columns
+  data <- data[, required_columns, with = FALSE]
+  
+  # Drop cuplicates of data
+  if(any(duplicated(data, by = "post_id"))){
+    cli::cli_alert("Duplicates in 'data' by 'post_id' detected and dropped.")
+    data <- unique(data, by = "post_id")
+  }
+  
+  # Converting the time variable to UNIX Timestamp
+  data[, time := as.numeric(as.POSIXct(time, tz = "UTC"))]
+  
+  # Sort by time
+  data <- data[order(time)]
+  
   # Step 1: Retrieving embeddings
-  emb_matrix <- get_embeddings(data = data,
-                               post_id = post_id, 
-                               time = time,
-                               content = content, 
-                               model_name = model_name, 
-                               batch_size = batch_size, 
-                               max_length = max_length, 
-                               use_fp16 = use_fp16,
-                               python_version = python_version,
-                               conda_path = conda_path,
-                               conda_env_path = conda_env_path,
-                               conda_env_name = conda_env_name,
-                               ask = ask,
-                               force = force,
-                               verbose = verbose)
+  emb_matrix <- coorsim::get_embeddings(data = data,
+                                        post_id = post_id, 
+                                        time = time,
+                                        content = content, 
+                                        model_name = model_name, 
+                                        batch_size = batch_size, 
+                                        max_length = max_length, 
+                                        use_fp16 = use_fp16,
+                                        python_version = python_version,
+                                        conda_path = conda_path,
+                                        conda_env_path = conda_env_path,
+                                        conda_env_name = conda_env_name,
+                                        ask = ask,
+                                        force = force,
+                                        verbose = verbose)
   
   # Step 2: Store embeddings as .h5 file
   post_id <- as.character(data$post_id)
@@ -275,6 +325,7 @@ save_embeddings <- function(data,
   # Close the HDF5 file
   h5$close_all()
 }
+
 
 
 
