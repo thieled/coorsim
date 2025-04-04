@@ -23,6 +23,7 @@
 #' @param remove_loops Logical. If `TRUE`, removes self-similar posts from the same account. Default is `TRUE`.
 #' @param parallel Logical. If `TRUE`, enables parallel computation for similarity calculations. Default is `TRUE`.
 #' @param n_threads Optional. Integer specifying the number of threads for parallel computation. If `NULL`, defaults to available cores minus one.
+#' @param subset_emb Logical. Should the embedding matrix be subsetted to observations in data? Slower but more memory-friendly. Default is `FALSE`.
 #'
 #' @details
 #' The function follows four main steps:
@@ -66,7 +67,8 @@ detect_cosimilarity <- function(
     method = "cosine", 
     remove_loops = TRUE,
     parallel = TRUE,
-    n_threads = NULL
+    n_threads = NULL,
+    subset_emb = FALSE
 ) {
   
   
@@ -107,13 +109,20 @@ detect_cosimilarity <- function(
   
       # Helper function to check if a valid .h5 file path is provided
       is_h5file <- function(v) {
-        is.character(v) && file.exists(v) && grepl("\\.h5$", v, ignore.case = TRUE)
+        is.character(v) && file.exists(v) && suppressWarnings(hdf5r::is.h5file(v))
       }
   
   if(is_h5file(embeddings)){
     
+    # Subset 
+    if(subset_emb == T){
+      ids_subset = data$post_id
+    }else{
+      ids_subset = NULL
+    }
+    
     embeddings = load_h5_embeddings(path = embeddings,
-                                    ids_subset = data$post_id,
+                                    ids_subset = ids_subset,
                                     verbose = verbose)
     
   }
@@ -452,8 +461,24 @@ coorsim_prepare_data <- function(
     # Read post IDs
     ids <- h5$open("metadata/post_id")$read()
     
+    # Identify matched rows
+    matched_indices <- data$post_id %in% ids
+    
+    # Show message if rows are dropped and verbose is TRUE
+    if (verbose) {
+      dropped_count <- sum(!matched_indices)
+      if (dropped_count > 0) {
+        warning(paste0("Dropped n=", dropped_count, " posts without representation in 'embeddings'"))
+      }
+    }
+    
+    # Subset the data.table to keep only matched rows
+    data <- data[matched_indices, ]
+    
+    
     # Close HDF5 file
     h5$close_all()
+    
   }
   
   
@@ -500,7 +525,7 @@ coorsim_prepare_data <- function(
   
   # In y dt, created_time and end_time should be identical
   data[, time_dup := time]
-  data.table::setkey(data, time, time_dup) # Set key for join
+  data.table::setkey(data, time, end_time) # Set key for join
   
   # Split off content table - to economize memory
   #content_dt <- data[, .(post_id, content)]
@@ -533,10 +558,10 @@ coorsim_match_overlaps <- function(data){
     # Match overlapping posts by time_window
   
     overlaps <- data.table::foverlaps(data, data,
-                                      by.x = c("time", "end_time"),
-                                      by.y = c("time", "time_dup"),
+                                      by.x = c("time", "time_dup"),
+                                      by.y = c("time", "end_time"),
                                       mult = "all",
-                                      type="any",
+                                      type="within",
                                       nomatch=0L,
                                       verbose = F)
     
@@ -547,15 +572,22 @@ coorsim_match_overlaps <- function(data){
                            post_id != post_id_y
                          ]
 
-  # Function to remove duplicated pairs -- (benchmarked) 
-  remove_dup_pairs <- function(dt) {
-    dt[, c("post_id", "post_id_y") := .(pmin(post_id, post_id_y), # sorts both IDs 
-                                        pmax(post_id, post_id_y))]
-    unique(dt) # drops non-unique pairs
-  }
-  
-  overlaps <- remove_dup_pairs(overlaps)
-  
+    
+    overlaps <- overlaps[time <= time_y]
+    
+    overlaps <- unique(overlaps, by = c("post_id", "post_id_y"))
+    
+  #   
+  #   
+  # # Function to remove duplicated pairs -- (benchmarked) 
+  # remove_dup_pairs <- function(dt) {
+  #   dt[, c("post_id", "post_id_y") := .(pmin(post_id, post_id_y), # sorts both IDs 
+  #                                       pmax(post_id, post_id_y))]
+  #   unique(dt) # drops non-unique pairs
+  # }
+  # 
+  # overlaps <- remove_dup_pairs(overlaps)
+  # 
   
   # Split overlaps in groups by post_id - using data.table functions -- (benchmarked)
   id_list <- overlaps[, .(id_vector = list(unique(c(.BY[[1]], post_id_y)))), by = post_id]

@@ -18,7 +18,8 @@ detect_cosimilarity(
   method = "cosine",
   remove_loops = TRUE,
   parallel = TRUE,
-  n_threads = NULL
+  n_threads = NULL,
+  subset_emb = FALSE
 )
 }
 \arguments{
@@ -54,6 +55,8 @@ detect_cosimilarity(
 \item{parallel}{Logical. If `TRUE`, enables parallel computation for similarity calculations. Default is `TRUE`.}
 
 \item{n_threads}{Optional. Integer specifying the number of threads for parallel computation. If `NULL`, defaults to available cores minus one.}
+
+\item{subset_emb}{Logical. Should the embedding matrix be subsetted to observations in data? Slower but more memory-friendly. Default is `FALSE`.}
 }
 \value{
 A `data.table` containing pairs of similar posts with the following columns:
