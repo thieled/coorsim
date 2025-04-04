@@ -347,7 +347,6 @@ load_h5_embeddings <- function(path,
                                ids_subset = NULL,
                                verbose = TRUE) {
   
-  # Helper function to check if a valid .h5 file path is provided
   is_h5file <- function(v) {
     is.character(v) && file.exists(v) && grepl("\\.h5$", v, ignore.case = TRUE)
   }
@@ -358,46 +357,38 @@ load_h5_embeddings <- function(path,
   
   if (verbose) cli::cli_inform("Loading embeddings from the .h5 file.")
   
-  # Open the HDF5 file
   h5 <- hdf5r::H5File$new(path, mode = "r")
+  on.exit(h5$close_all())
   
-  # Check if metadata group exists
   if (!"metadata" %in% names(h5)) {
-    h5$close_all()
-    stop("Embeddings provided as .h5 file but 'metadata' group was not found. ",
-         "Please use 'coorsim::save_embeddings()' to retain a correct .h5 file.")
+    stop("Embeddings provided as .h5 file but 'metadata' group was not found.")
   }
   
-  metadata_group <- h5$open("metadata")
+  metadata_group <- h5[["metadata"]]
   
-  # Check if post_id dataset exists
   if (!"post_id" %in% names(metadata_group)) {
-    h5$close_all()
-    stop("Embeddings provided as .h5 file but 'metadata/post_id' was not found. ",
-         "Please use 'coorsim::save_embeddings()' to retain a correct .h5 file.")
+    stop("Embeddings provided as .h5 file but 'metadata/post_id' was not found.")
   }
   
-  # Load post IDs
-  ids <- metadata_group$open("post_id")$read()
+  ids <- metadata_group[["post_id"]]$read()
   
   if (!is.null(ids_subset)) {
-    # Find indices matching the ids
-    indices <- which(ids %in% ids_subset)
+    # Match IDs
+    index_map <- match(ids_subset, ids)
+    valid_idx <- which(!is.na(index_map))
+    h5_idx <- index_map[valid_idx]
     
-    if (length(indices) == 0) {
-      h5$close_all()
-      return(NULL)  # No matching data
-    }
+    if (length(h5_idx) == 0) return(NULL)
     
-    # Load corresponding embeddings
-    m <- h5$open("embeddings")$read(args = list(indices, NULL))
-    rownames(m) <- ids[indices]
+    # Use args to read selected rows, all columns
+    #  m <- embeddings_ds$read(args = list(h5_idx, NULL))
+    if (verbose) cli::cli_inform("Subsetting embeddings by id.")
+    m <- h5[["embeddings"]][h5_idx,]
+    rownames(m) <- ids_subset[valid_idx]
   } else {
-    m <- h5$open("embeddings")$read()
+    m <- h5[["embeddings"]]$read()
     rownames(m) <- ids
   }
-  
-  h5$close_all()
   
   return(Matrix::as.matrix(m))
 }
