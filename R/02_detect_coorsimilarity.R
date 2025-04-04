@@ -357,6 +357,9 @@ coorsim_prepare_data <- function(
     data <- data.table::as.data.table(data)
   }
   
+  ### Create a copy to avoid changes in original data
+  data <- data.table::copy(data)
+  
   ### Column names
   
   # Define the required columns and their alternative names
@@ -429,7 +432,7 @@ coorsim_prepare_data <- function(
   
   # Helper function to check if a valid .h5 file path is provided
   is_h5file <- function(v) {
-    is.character(v) && file.exists(v) && grepl("\\.h5$", v, ignore.case = TRUE)
+    is.character(v) && file.exists(v) && suppressWarnings(hdf5r::is.h5file(v))
   }
   
   if (is_h5file(embeddings)) {
