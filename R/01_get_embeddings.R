@@ -16,6 +16,7 @@
 #' @param batch_size Integer. Batch size for processing texts (default is 32L).
 #' @param max_length Integer. Maximum sequence length for tokenization (default is 512L).
 #' @param use_fp16 Logical, whether to use fp16 precision on GPU if available (default is FALSE).
+#' @param trust_remote_code Logical, whether to trust remote code from huggingface or not (default is TRUE). Necessary for Alibaba gte.
 #' @param python_version Character. The Python version to install in the Conda environment.
 #' Defaults to `"3.13"`.
 #' @param conda_path Character. The path where Miniconda should be installed.
@@ -40,7 +41,7 @@ get_embeddings <- function(data,
                            batch_size = 16L, 
                            max_length = 512L, 
                            use_fp16 = TRUE,
-                           
+                           trust_remote_code = TRUE,
                            python_version = "3.13",
                            conda_path = NULL,
                            conda_env_path = NULL,
@@ -122,7 +123,8 @@ get_embeddings <- function(data,
     model_name = model_name,
     batch_size = batch_size,
     max_length = max_length,
-    use_fp16 = use_fp16
+    use_fp16 = use_fp16,
+    trust_remote_code = trust_remote_code
   )
   
   embeddings_m <- Matrix::as.matrix(embeddings)
@@ -156,6 +158,8 @@ get_embeddings <- function(data,
 #' Defaults to `512L`.
 #' @param use_fp16 Logical. Whether to use half-precision floating point (`fp16`) for faster 
 #' computation on GPUs. Defaults to `TRUE`.
+#' @param trust_remote_code Logical, whether to trust remote code from huggingface or not (default is TRUE). 
+#' Necessary for Alibaba gte.
 #' @param chunk_size Integer. The number of observations per chunk when storing embeddings in the 
 #' HDF5 file. Defaults to `512L`.
 #' @param h5_fileprefix Character. Prefix for the generated HDF5 filename. Defaults to `"embeddings_"`.
@@ -207,7 +211,7 @@ save_embeddings <- function(data,
                             batch_size = 32L,
                             max_length = 512L, 
                             use_fp16 = TRUE,
-                            
+                            trust_remote_code = TRUE,
                             chunk_size = 512L,
                             
                             h5_fileprefix = "embeddings_",
@@ -273,7 +277,7 @@ save_embeddings <- function(data,
   data <- data[order(time)]
   
   # Step 1: Retrieving embeddings
-  emb_matrix <- coorsim::get_embeddings(data = data,
+  emb_matrix <- get_embeddings(data = data,
                                         post_id = post_id, 
                                         time = time,
                                         content = content, 
@@ -281,6 +285,7 @@ save_embeddings <- function(data,
                                         batch_size = batch_size, 
                                         max_length = max_length, 
                                         use_fp16 = use_fp16,
+                                        trust_remote_code =trust_remote_code, 
                                         python_version = python_version,
                                         conda_path = conda_path,
                                         conda_env_path = conda_env_path,

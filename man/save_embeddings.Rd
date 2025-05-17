@@ -13,6 +13,7 @@ save_embeddings(
   batch_size = 32L,
   max_length = 512L,
   use_fp16 = TRUE,
+  trust_remote_code = TRUE,
   chunk_size = 512L,
   h5_fileprefix = "embeddings_",
   save_dir = NULL,
@@ -49,6 +50,9 @@ Defaults to `512L`.}
 
 \item{use_fp16}{Logical. Whether to use half-precision floating point (`fp16`) for faster 
 computation on GPUs. Defaults to `TRUE`.}
+
+\item{trust_remote_code}{Logical, whether to trust remote code from huggingface or not (default is TRUE). 
+Necessary for Alibaba gte.}
 
 \item{chunk_size}{Integer. The number of observations per chunk when storing embeddings in the 
 HDF5 file. Defaults to `512L`.}

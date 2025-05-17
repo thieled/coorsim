@@ -46,7 +46,8 @@ def get_text_embeddings(texts,
                         model_name="distilbert/distilbert-base-multilingual-cased", 
                         batch_size=32, 
                         max_length=512, 
-                        use_fp16=False):
+                        use_fp16=False,
+                        trust_remote_code=True):
     """
     Generates embeddings for a list of texts using the specified transformer model.
 
@@ -59,6 +60,7 @@ def get_text_embeddings(texts,
         batch_size (int): Batch size for processing.
         max_length (int): Maximum sequence length for tokenization.
         use_fp16 (bool): Whether to use fp16 precision on CUDA devices (default is False).
+        trust_remote_code (bool): Whether to trust remote code (default True).
 
     Returns:
         np.ndarray: The sentence/document embeddings.
@@ -67,8 +69,8 @@ def get_text_embeddings(texts,
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Load tokenizer and model (using fast tokenizer for efficiency)
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-    model = AutoModel.from_pretrained(model_name).to(device).eval()
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True, trust_remote_code=True)
+    model = AutoModel.from_pretrained(model_name, trust_remote_code=True).to(device).eval()
     
     # Optionally set the model to fp16 precision if using a CUDA device and requested.
     if device.type == "cuda" and use_fp16:

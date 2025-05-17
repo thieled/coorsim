@@ -13,6 +13,7 @@ get_embeddings(
   batch_size = 16L,
   max_length = 512L,
   use_fp16 = TRUE,
+  trust_remote_code = TRUE,
   python_version = "3.13",
   conda_path = NULL,
   conda_env_path = NULL,
@@ -46,6 +47,8 @@ Other useful, more complex models to consider are, e.g.:
 \item{max_length}{Integer. Maximum sequence length for tokenization (default is 512L).}
 
 \item{use_fp16}{Logical, whether to use fp16 precision on GPU if available (default is FALSE).}
+
+\item{trust_remote_code}{Logical, whether to trust remote code from huggingface or not (default is TRUE). Necessary for Alibaba gte.}
 
 \item{python_version}{Character. The Python version to install in the Conda environment.
 Defaults to `"3.13"`.}

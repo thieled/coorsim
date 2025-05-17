@@ -1,4 +1,4 @@
-#' Detect Coordinated Social Media Manipulation
+#' Detect Co-Similarities
 #'
 #' @description This function identifies highly similar social media posts shared within a specified time window,
 #' aiming to detect coordinated social media manipulation. It uses either text-based sparse document-feature matrices

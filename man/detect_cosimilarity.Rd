@@ -2,7 +2,7 @@
 % Please edit documentation in R/02_detect_coorsimilarity.R
 \name{detect_cosimilarity}
 \alias{detect_cosimilarity}
-\title{Detect Coordinated Social Media Manipulation}
+\title{Detect Co-Similarities}
 \usage{
 detect_cosimilarity(
   data,
