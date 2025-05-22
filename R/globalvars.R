@@ -61,7 +61,9 @@ utils::globalVariables(c(".",
                          "split_text",
                          "get_text_embeddings",
                          "vmessage",
-                         "i.content"
+                         "i.content",
+                         'param_cols',
+                         '..param_cols'
                          ))
 
 

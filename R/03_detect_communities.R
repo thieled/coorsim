@@ -28,6 +28,8 @@
 #' @param min_comm_size Integer. Minimum community size for filtering. Default is `NULL`.
 #' @param ... Additional parameters passed to the clustering functions.
 #' 
+#' @import data.table
+#' 
 #' @return A named list containing:
 #'   \describe{
 #'     \item{\code{graph}}{An `igraph` object representing the network graph created from the filtered edge list.}
@@ -346,6 +348,29 @@ coorsim_detect_groups <- function(simdt,
     
   }
   
+  # Extract parameters  
+  param_cols <- grep("^param_", names(simdt), value = TRUE)
+  
+  if (length(param_cols) > 0) {
+    sim_params <- simdt[1, ..param_cols]
+    names(sim_params) <- sub("^param_", "", names(sim_params))
+    params <- as.list(sim_params)
+  } else {
+    params <- list()
+  }
+  
+  # Append additional parameters
+  params <- c(
+    params,
+    list(
+      edge_weight = edge_weight,
+      cluster_method = cluster_method,
+      resolution = resolution,
+      theta = theta,
+      seed = seed,
+      min_comm_size = min_comm_size
+    )
+  )
   
   # Return the results as list
   result <- list(
@@ -354,7 +379,8 @@ coorsim_detect_groups <- function(simdt,
     edge_list = edge_list,
     sim_dt = simdt,
     node_list = node_membership_dt,
-    post_data = post_dt
+    post_data = post_dt,
+    params = params
   )
   
   if(verbose) cli::cli_progress_done()
