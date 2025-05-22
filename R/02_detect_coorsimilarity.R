@@ -24,6 +24,7 @@
 #' @param parallel Logical. If `TRUE`, enables parallel computation for similarity calculations. Default is `TRUE`.
 #' @param n_threads Optional. Integer specifying the number of threads for parallel computation. If `NULL`, defaults to available cores minus one.
 #' @param subset_emb Logical. Should the embedding matrix be subsetted to observations in data? Slower but more memory-friendly. Default is `FALSE`.
+#' @param embeddings_name Character. The name of the embedding model used to be stored in 'sim_dt'. Default is `NULL`. 
 #'
 #' @details
 #' The function follows four main steps:
@@ -68,7 +69,8 @@ detect_cosimilarity <- function(
     remove_loops = TRUE,
     parallel = TRUE,
     n_threads = NULL,
-    subset_emb = FALSE
+    subset_emb = FALSE,
+    embeddings_name = NULL
 ) {
   
   
@@ -121,6 +123,9 @@ detect_cosimilarity <- function(
       ids_subset = NULL
     }
     
+    # Pick embeddings name from filename
+    if(is.null(embeddings_name)) embeddings_name <- basename(embeddings)    
+    
     embeddings = load_h5_embeddings(path = embeddings,
                                     ids_subset = ids_subset,
                                     verbose = verbose)
@@ -129,6 +134,8 @@ detect_cosimilarity <- function(
   
   # Option B: No embeddings are provided - use word co-occurence similarity
   if(is.null(embeddings)){
+    
+    embeddings_name <- "word occurrence"
     
     # Define function
     get_sparse_similarity <- function(ids, 
@@ -192,8 +199,6 @@ detect_cosimilarity <- function(
       
     }else{
       
-      # Option C: Embeddings are provided.
-      
       cli::cli_progress_step("[3/4]: Calculating similarities using sparse document-feature-matrixes.",
                              msg_done = "[3/4]: Calculated similarities using sparse document-feature-matrixes.")
       
@@ -218,6 +223,10 @@ detect_cosimilarity <- function(
     
   }else{
     
+    # Option C: Embeddings are provided
+    
+    # Store embeddings name
+    if(is.null(embeddings_name)) embeddings_name <- "embeddings provided, unspecified"
     
     ### Step 3:  Query the vector matrix and calculate pairwise similarities using Cpp
     
@@ -291,6 +300,11 @@ detect_cosimilarity <- function(
   
   # Filter simil_dt to keep only rows where account_id and account_id_y are in account_counts
   simil_dt <- simil_dt[account_id %in% account_counts & account_id_y %in% account_counts]
+  
+  # Add parameter infos
+  simil_dt[, c("param_embeddings", "param_time_window", "param_min_simil", "param_min_participation") := 
+             .(embeddings_name, time_window, min_simil, min_participation)]
+  
   
   if(verbose) cli::cli_progress_done()
   
