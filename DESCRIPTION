@@ -39,7 +39,10 @@ Imports:
     future,
     proxyC,
     text2map,
-    pbapply
+    pbapply,
+    jsonlite,
+    purrr,
+    tibble
 Remotes: 
     JBGruber/rollama
 LinkingTo: Rcpp, RcppArmadillo

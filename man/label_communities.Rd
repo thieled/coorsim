@@ -2,48 +2,30 @@
 % Please edit documentation in R/05_generate_community_labels.R
 \name{label_communities}
 \alias{label_communities}
-\title{Generate Community Labels and Descriptions Using Local LLM}
+\title{Label Communities Using LLM}
 \usage{
 label_communities(
   groups_data,
-  llm,
-  llm2,
-  instruction,
+  model = "llama3.2:3b-instruct-q8_0",
   retries = 3,
-  trunc = 4000
+  retry_trunc = 4000
 )
 }
 \arguments{
-\item{groups_data}{A list containing community data, including `community_sample` with sampled community content for labeling and summarization.}
+\item{groups_data}{A list containing `community_content` as returned by `sample_community_text()`.}
 
-\item{llm}{Character. The primary model name hosted in Ollama to use for generating community labels and descriptions.}
+\item{model}{Character. The name of the local LLM model (must be available in Ollama).}
 
-\item{llm2}{Character. An alternative model name to use if the primary model fails after the specified number of retries.}
+\item{retries}{Integer. Number of retry attempts for communities with invalid JSON.}
 
-\item{instruction}{Character. The instruction text to prepend to each community's content to guide the LLM's output.}
-
-\item{retries}{Numeric. The maximum number of retry attempts to fill missing labels and descriptions if the primary model fails. Defaults to 3.}
-
-\item{trunc}{Numeric. The character limit for truncating content before passing it to the model. Defaults to 4000.}
+\item{retry_trunc}{Integer. Maximum character length to truncate input text during retries.}
 }
 \value{
-A modified version of `groups_data` with an additional `labelled_communities` data frame. This data frame includes:
-- `label_generated`: The generated label for each community.
-- `description_generated`: A descriptive summary for each community.
-- `message.content`: The model’s raw output content for each query.
-- `sampled_content`: The sampled text content from each community.
-- `label_failed`: A flag indicating whether the function was unable to generate a label after all attempts.
+The input `groups_data`, with `community_content` updated to include model-generated
+columns: `label`, `description`, `lang`, `is_valid_json`, `response`, and metadata.
 }
 \description{
-This function uses a locally hosted language model (LLM) through Ollama to generate labels and descriptions for communities based on sampled community content. The function includes retry logic and can switch to an alternative model if the primary model fails to produce results.
-}
-\details{
-The function proceeds through the following steps:
-1. **Initial Query**: Checks if Ollama is running and submits content queries to the primary model (`llm`) for labeling and summarization.
-2. **Label and Description Extraction**: Parses the model’s output to extract labels and descriptions based on specified patterns.
-3. **Retry Logic**: For communities missing labels or descriptions, retries with the primary model up to `retries` times, and if still unsuccessful, switches to `llm2`.
-4. **Final Output**: Combines results back into `groups_data`, appending `labelled_communities` with all generated labels and descriptions.
-}
-\seealso{
-\code{\link[rollama]{ping_ollama}}, \code{\link[rollama]{query}} for handling queries with Ollama models.
+This function takes sampled community content and uses a local LLM model via the `rollama` interface
+to generate JSON-formatted labels, descriptions, and language tags for each community. If any results
+fail JSON validation, the function retries with truncated input up to a specified number of times.
 }

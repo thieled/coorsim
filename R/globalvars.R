@@ -63,7 +63,14 @@ utils::globalVariables(c(".",
                          "vmessage",
                          "i.content",
                          'param_cols',
-                         '..param_cols'
+                         '..param_cols',
+                         "seed",
+                         "response",
+                         "json_cleaned",
+                         "parsed_json",
+                         "is_valid_json",
+                         "community_sample",
+                         "text"
                          ))
 
 

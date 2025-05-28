@@ -116,198 +116,132 @@ sample_community_text <- function(groups_data,
 
 
 
-
-
-#' Generate Community Labels and Descriptions Using Local LLM
+#' Clean LLM-Generated JSON Strings
 #'
-#' This function uses a locally hosted language model (LLM) through Ollama to generate labels and descriptions for communities based on sampled community content. The function includes retry logic and can switch to an alternative model if the primary model fails to produce results.
+#' This function attempts to clean and standardize LLM-generated JSON-like strings for valid parsing.
+#' It extracts the first JSON-like object enclosed in curly braces, replaces single quotes with
+#' double quotes where appropriate, and escapes backslashes as required for proper JSON formatting.
 #'
-#' @param groups_data A list containing community data, including `community_sample` with sampled community content for labeling and summarization.
-#' @param llm Character. The primary model name hosted in Ollama to use for generating community labels and descriptions.
-#' @param llm2 Character. An alternative model name to use if the primary model fails after the specified number of retries.
-#' @param instruction Character. The instruction text to prepend to each community's content to guide the LLM's output.
-#' @param retries Numeric. The maximum number of retry attempts to fill missing labels and descriptions if the primary model fails. Defaults to 3.
-#' @param trunc Numeric. The character limit for truncating content before passing it to the model. Defaults to 4000.
+#' @param json_strings A character vector of raw JSON-like strings returned by an LLM.
 #'
-#' @return A modified version of `groups_data` with an additional `labelled_communities` data frame. This data frame includes:
-#' - `label_generated`: The generated label for each community.
-#' - `description_generated`: A descriptive summary for each community.
-#' - `message.content`: The model’s raw output content for each query.
-#' - `sampled_content`: The sampled text content from each community.
-#' - `label_failed`: A flag indicating whether the function was unable to generate a label after all attempts.
+#' @return A character vector of cleaned JSON strings suitable for parsing with `jsonlite::fromJSON()`.
 #'
-#' @details
-#' The function proceeds through the following steps:
-#' 1. **Initial Query**: Checks if Ollama is running and submits content queries to the primary model (`llm`) for labeling and summarization.
-#' 2. **Label and Description Extraction**: Parses the model’s output to extract labels and descriptions based on specified patterns.
-#' 3. **Retry Logic**: For communities missing labels or descriptions, retries with the primary model up to `retries` times, and if still unsuccessful, switches to `llm2`.
-#' 4. **Final Output**: Combines results back into `groups_data`, appending `labelled_communities` with all generated labels and descriptions.
+#' @examples
+#' # Example 1: Fix single quotes
+#' raw_json <- "{'label':'Test','description':'A test case','lang':'en'}"
+#' clean_json_strings(raw_json)
 #'
-#' @seealso \code{\link[rollama]{ping_ollama}}, \code{\link[rollama]{query}} for handling queries with Ollama models.
+#' # Example 2: Input with backslashes
+#' messy_json <- "{'label':'Path','description':'Folder path is C:\\\\Users\\\\','lang':'en'}"
+#' clean_json_strings(messy_json)
 #'
 #' @export
-label_communities <- function(groups_data, 
-                              llm, 
-                              llm2, 
-                              instruction, 
-                              retries = 3, 
-                              trunc = 4000) {
+clean_json_strings <- function(json_strings) {
+  # Extract JSON-like content: start with the first '{' and include everything up to the first matching '}'
+  json_cleaned <- gsub(".*?(\\{.*?\\}).*", "\\1", json_strings)
   
+  # Replace single quotes around JSON keys/values with double quotes
+  json_cleaned <- gsub("(?<=[:{,\\s])'(.*?)'", "\"\\1\"", json_cleaned, perl = TRUE)
   
-  ### Check if ollama is running
+  # Properly escape unescaped single quotes within JSON values
+  json_cleaned <- gsub("(?<!\\\\)\\'", "'", json_cleaned, perl = TRUE)
   
-  ping_res <- try(rollama::ping_ollama(), silent = TRUE)
+  # Double-escape backslashes (needed for valid JSON parsing)
+  json_cleaned <- gsub("\\\\", "\\\\\\\\", json_cleaned)
   
-  if(!ping_res[[1]]) stop("Ollama is not running.")
-  
-  
-  # Define query function
-  process_queries <- function(instruction, content_vector, community_vector, model) {
-    # Generate queries
-    queries <- paste0(instruction, content_vector, sep = " \n ")
-    
-    # Process each query and retain the community identifier
-    res <- lapply(seq_along(queries), function(i) {
-      cli::cli_inform("Labelling community no. {community_vector[i]} with model {model}")
-      r <- rollama::query(q = queries[i], model = model)
-      r <- as.data.frame(r)
-      r$query_text <- queries[i]  # Add the query text for reference
-      r$community <- community_vector[i]  # Add the community identifier
-      return(r)
-    })
-    
-    # Combine all results, filling any missing columns
-    r_df <- data.table::rbindlist(res, use.names = TRUE, fill = TRUE)
-    
-    # Group by `community` and `query_text`, then summarize if there are multiple rows per query
-    r_df <- r_df |>
-      dplyr::group_by(community, query_text) |>
-      dplyr::summarize(dplyr::across(dplyr::everything(), ~ paste(.x, collapse = "; "), .names = "collapsed_{.col}"), .groups = "drop")
-    
-    # Remove the `collapsed_` prefix for consistency
-    colnames(r_df) <- sub("^collapsed_", "", colnames(r_df))
-    
-    return(r_df)
-  }
-  
-  # Initial query
-  cli::cli_inform("Querying {llm}.")
-  q_df <- groups_data$community_sample
-  
-  ## Truncate content
-  if(!is.null(trunc)) content_vector <- q_df$sampled_content |> stringr::str_trunc(width = trunc)
-  
-  # Process queries and ensure that `community` is preserved
-  r_df <- process_queries(instruction = instruction, 
-                          content_vector = content_vector, 
-                          community_vector = q_df$community,
-                          model = llm)
-  
-  # Merge results back into the original data frame using `community`
-  q_df <- merge(q_df, r_df, by = "community", all.x = TRUE)
-  
-  extract_labels_descriptions <- function(df) {
-    df |>
-      dplyr::mutate(
-        # Perform splitting based on the first occurrence of "[DES" (to capture descriptions starting with any variation of [DESCRIPTION])
-        split_text = stringr::str_split_fixed(message.content, "\\[DES.*?\\]", 2),
-        
-        # Take the first part before the [DES] as the label
-        label_generated = stringr::str_trim(split_text[, 1]),
-        
-        # Take the second part after the [DES] as the description, if available
-        description_generated = ifelse(split_text[, 2] != "", stringr::str_trim(split_text[, 2]), NA),
-        
-        # Remove unwanted terms from the label, especially [name:] or NAME
-        label_generated = ifelse(
-          stringr::str_detect(label_generated, "(?i)\\[name:?\\]|NAME"),
-          "", 
-          label_generated
-        ),
-        
-        # Clean up label and description fields (remove square brackets, LABEL, DESCRIPTION remnants)
-        label_generated = stringr::str_replace_all(label_generated, "\\[|\\]|:|(?i)LABE\\w*", "") |> stringr::str_trim(),
-        description_generated = stringr::str_replace_all(description_generated, "\\[|\\]|:|(?i)DESCR\\w*", "") |> stringr::str_trim()
-      ) |>
-      dplyr::select(-split_text)  # Remove the intermediate split column
-  }
-  
-  # Extract and then check for empty labels or descriptions
-  q_df <- extract_labels_descriptions(q_df)  
-  missing_rows <- dplyr::filter(q_df, is.na(label_generated) | is.na(description_generated) | label_generated == "" | description_generated == "")
-  
-  # Initialize retry counter and label_failed column
-  retry_count <- 0
-  q_df$label_failed <- FALSE  # Add a flag to indicate failure after 4 attempts
-  
-  
-  # Loop until all labels and descriptions are filled or retry limit is reached
-  while (nrow(missing_rows) > 0 && retry_count < retries) {
-    retry_count <- retry_count + 1
-    cli::cli_inform("Re-querying {nrow(missing_rows)} missing entries with trunctation {trunc}. Attempt {retry_count} of {retries}.")
-    
-    ## Truncate content
-    if(!is.null(trunc)) content_vector <- missing_rows$sampled_content |> stringr::str_trunc(width = trunc)
-    
-    # Re-run the query for missing entries only
-    r_df_retry <- process_queries(
-      instruction = instruction, 
-      content_vector = content_vector, 
-      community_vector = missing_rows$community
-    )
-    
-    # Merge re-queried results
-    q_df <- dplyr::rows_update(q_df, r_df_retry, by = "community")
-    
-    # Re-extract labels and descriptions
-    q_df <- extract_labels_descriptions(q_df)
-    
-    # Update missing rows
-    missing_rows <- dplyr::filter(q_df, is.na(label_generated) | is.na(description_generated) | label_generated == "" | description_generated == "")
-    
-    # If the retry limit is reached, mark as failed
-    if (retry_count == retries) {
-      q_df$label_failed[q_df$community %in% missing_rows$community] <- TRUE
-    }
-  }
-  
-  if (nrow(missing_rows) > 0) {
-    cli::cli_warn("Some labels and descriptions failed after {retries} attempts. Trying with {llm2}.")
-    
-    ## Truncate content
-    if(!is.null(trunc)) content_vector <- missing_rows$sampled_content |> stringr::str_trunc(width = trunc)
-    
-    # Try llm2 for the failed entries
-    r_df_llm2 <- process_queries(
-      instruction = instruction,
-      content_vector = content_vector,
-      community_vector = missing_rows$community,
-      model = llm2
-    )
-    
-    # Merge llm2 results back into the original data frame
-    q_df <- dplyr::rows_update(q_df, r_df_llm2, by = "community")
-    
-    # Re-extract labels and descriptions for llm2 output
-    q_df <- extract_labels_descriptions(q_df)
-    
-    # Update missing rows
-    missing_rows <- dplyr::filter(q_df, is.na(label_generated) | is.na(description_generated) | label_generated == "" | description_generated == "")
-  }
-  
-  # Check if any rows still failed after trying both models
-  if (nrow(missing_rows) > 0) {
-    cli::cli_warn("Some labels and descriptions could not be filled even after using {llm2}.")
-  }
-  
-  ## Merge parameters to samped texts to prepare export as .csv
-  
-  
-  q_df <- q_df |> dplyr::select(community, label_generated, description_generated, message.content, sampled_content, dplyr::everything()) 
-  
-  ### File to store
-  store_list <- append(groups_data, list(labelled_communities = q_df))
-  
-  return(store_list)
+  return(json_cleaned)
 }
 
+
+
+
+#' Label Communities Using LLM
+#'
+#' This function takes sampled community content and uses a local LLM model via the `rollama` interface
+#' to generate JSON-formatted labels, descriptions, and language tags for each community. If any results
+#' fail JSON validation, the function retries with truncated input up to a specified number of times.
+#'
+#' @param groups_data A list containing `community_content` as returned by `sample_community_text()`.
+#' @param model Character. The name of the local LLM model (must be available in Ollama).
+#' @param retries Integer. Number of retry attempts for communities with invalid JSON.
+#' @param retry_trunc Integer. Maximum character length to truncate input text during retries.
+#'
+#' @return The input `groups_data`, with `community_content` updated to include model-generated
+#' columns: `label`, `description`, `lang`, `is_valid_json`, `response`, and metadata.
+#' @export
+label_communities <- function(groups_data, 
+                              model = "llama3.2:3b-instruct-q8_0",
+                              retries = 3, 
+                              retry_trunc = 4000) {
+  if (!"community_content" %in% names(groups_data)) {
+    stop("No 'communities_content' found. Please first sample content by 'sample_community_text'.")
+  }
+  
+  community_content <- data.table::copy(groups_data$community_content)
+  
+  ping_res <- try(rollama::ping_ollama(), silent = TRUE)
+  if (!ping_res[[1]]) stop("Ollama is not running.")
+  
+  example_resp <- tibble::tribble(
+    ~text, ~answer,
+    example_text, example_answer
+  )
+  
+  retry <- 0
+  res_all <- list()
+  community_current <- community_content
+  
+  repeat {
+    queries <- rollama::make_query(
+      text = community_current$text,
+      template = "{prefix}\n{text}\n{prompt}",
+      prompt = example_prompt,
+      prefix = "Posts to summarize:",
+      system = example_system,
+      example = example_resp
+    )
+    
+    responses <- rollama::query(
+      queries,
+      model = model,
+      screen = TRUE,
+      model_params = list(seed = seed),
+      verbose = TRUE
+    )
+    
+    res_df <- community_current |> 
+      dplyr::mutate(
+        response = purrr::map_chr(responses, ~ purrr::pluck(.x, "message", "content")),
+        model = purrr::map_chr(responses, ~ purrr::pluck(.x, "model")),
+        model_queried_at = purrr::map_chr(responses, ~ purrr::pluck(.x, "created_at")),
+        model_total_duration = purrr::map_dbl(responses, ~ purrr::pluck(.x, "total_duration"))
+      ) |>  
+      dplyr::mutate(
+        json_cleaned = clean_json_strings(response),
+        parsed_json = lapply(json_cleaned, function(x) tryCatch(jsonlite::fromJSON(x), error = function(e) NULL)),
+        is_valid_json = sapply(json_cleaned, jsonlite::validate),
+        label = sapply(parsed_json, function(x) if (is.null(x)) NA else x$label),
+        description = sapply(parsed_json, function(x) if (is.null(x)) NA else x$description),
+        lang = sapply(parsed_json, function(x) if (is.null(x)) NA else x$lang)
+      ) |> 
+      dplyr::select(-json_cleaned, -parsed_json)
+    
+    res_all[[retry + 1]] <- res_df
+    
+    if (all(res_df$is_valid_json) || retry >= retries) {
+      break
+    }
+    
+    retry <- retry + 1
+    
+    community_current <- dplyr::filter(res_df, !is_valid_json) |> 
+      dplyr::left_join(community_sample, by = "community") |> 
+      dplyr::mutate(text = stringr::str_trunc(text, retry_trunc))
+  }
+  
+  res_df <- dplyr::bind_rows(res_all)
+  
+  groups_data$community_content <- res_df
+  
+  return(groups_data)
+}
