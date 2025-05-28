@@ -1,201 +1,118 @@
 
-### TO DO:
-### Use huggingface models and conda-coorsim infrastructure instead of rollama. 
-
-
-#' Prepare and Clean Account Texts
+#' Sample cleaned and formatted post data per community for classification
 #'
-#' This function processes account-related text data in a given `groups_data` object. It cleans post content, 
-#' samples a specified number of posts per account, and prepares a consolidated text output containing account 
-#' names, bios, and locations. This output is added to the `node_list` in `groups_data`.
+#' This function samples and cleans posts from social media community members,
+#' returning one row per community with a markdown-style text summary, list of post IDs,
+#' and estimated token count.
 #'
-#' @param groups_data A list containing `post_data` and `node_list` data tables, where `post_data` includes posts associated with each account, and `node_list` includes account metadata.
-#' @param sample_n Numeric. The number of posts to sample per account. Defaults to 5.
-#' @param sep Character. A separator to use between sampled posts in the aggregated output. Defaults to `" + "`.
-#' @param trunc_width Numeric. The maximum character width for truncating texts. Set to `NULL` for no truncation. Defaults to 100.
-#' @param min_n_char Numeric. The minimum number of characters a post must have to be included in sampling. Defaults to 5.
-#' @param verbose Logical. If `TRUE`, provides informational messages about each processing step. Defaults to `TRUE`.
-#' @param seed Numeric. A seed for random sampling, ensuring reproducibility. Defaults to 42.
+#' @param groups_data A list containing `post_data` and `node_list` as data.tables.
+#' @param additional_text_vars Character vector of additional text variables to include.
+#' @param sampling_ratio Proportion of total posts to sample per community.
+#' @param min_n Minimum number of posts per community.
+#' @param max_n Maximum number of posts per community.
+#' @param max_n_per_account Maximum number of posts per individual account.
+#' @param min_chars Minimum number of characters for content to be retained.
+#' @param max_text_length Maximum character length for each text field after cleaning.
+#' @param clean_name Logical. Whether to clean account names.
+#' @param verbose Logical. If TRUE, prints summary messages.
+#' @param seed Integer seed for reproducible sampling.
 #'
-#' @return A modified version of `groups_data`, with a new `account_text_prep` field in the `node_list`, which consolidates the cleaned name, location, bio, and sampled posts for each account.
-#'
-#' @details
-#' The function proceeds through the following steps:
-#' 1. Cleans the post content by removing URLs, mentions, and special characters, and truncates texts if `trunc_width` is specified.
-#' 2. Filters posts by `min_n_char` and samples up to `sample_n` posts per account.
-#' 3. Merges the sampled post content with `node_list` in `groups_data`.
-#' 4. Cleans and truncates account metadata, such as names, descriptions, and locations.
-#' 5. Creates a consolidated text output for each account in the `account_text_prep` field.
-#'
+#' @return `groups_data`, with additional data.table `community_content` with columns: `community`, `text`, `sampled_post_ids`, `approx_tokens`.
+#' @import data.table
 #' @export
-prepare_account_texts <- function(groups_data,
-                                  sample_n = 5,
-                                  sep = " + ",
-                                  trunc_width = 100,
-                                  min_n_char = 5,
+sample_community_text <- function(groups_data,
+                                  additional_text_vars = NULL,
+                                  sampling_ratio = 0.1,
+                                  min_n = 20,
+                                  max_n = 200,
+                                  max_n_per_account = 10,
+                                  min_chars = 20,
+                                  max_text_length = 500,
+                                  clean_name = FALSE,
                                   verbose = TRUE,
-                                  seed = 42){
-  
-  ### Helper functions
-  
-  # Define a cleaning function
-  clean_text <- function(text, 
-                         trunc_width = NULL) {
-    cleaned_text <- text |> 
-      stringr::str_remove_all("(f|ht)(tp)(s?)://\\S+|www\\.\\S+")  |>         # Remove hyperlinks
-      stringr::str_remove_all("@\\w+")  |>                 # Remove @mentions
-      stringr::str_remove_all("[\\p{So}\\p{Cn}\\U0001F000-\\U0001FAFF]") |>  # Normalize unusual fonts and symbols 
-      stringr::str_replace_all("[\r\n]+", " ")  |>         # Replace line breaks with a space
-      stringr::str_squish()  # Conditionally truncate if trunc_width is provided
-    
-    # Conditionally truncate if trunc_width is provided
-    if (!is.null(trunc_width)) {
-      cleaned_text <- stringr::str_trunc(cleaned_text, width = trunc_width, ellipsis = ".")
-    }
-    
-    return(cleaned_text)
+                                  seed = 42) {
+  if (!"node_list" %in% names(groups_data) || !"post_data" %in% names(groups_data)) {
+    stop("'groups_data' must contain 'node_list' and 'post_data'.")
   }
   
- 
-  
-  data.table::setDT(groups_data$post_data)
-  
-  ### Step 1: Cleaning and sampling Tweets from accounts
-  
-  if (verbose) cli::cli_inform("Step 1: Cleaning and sampling Tweets from accounts...\n")
-  
-  # Cleaning
-  groups_data$post_data$content_clean <- clean_text(groups_data$post_data$content, trunc_width = trunc_width)
-  
-  # Drop too short texts
-  filtered_data <- groups_data$post_data[ , nchar := nchar(content_clean)][nchar >= min_n_char, ]
-  # Create a sampled subset of post_data
   set.seed(seed)
-  sampled_data <- filtered_data[, .SD[sample(.N, min(.N, sample_n))], by = "account_id"]
+  post_data <- data.table::copy(groups_data$post_data)
   
+  required_vars <- c("post_id", "account_id", "account_name", "content")
+  all_vars <- unique(c(required_vars, additional_text_vars))
   
-  # Aggregate the sampled subset to create the variables
-  content_sample <- sampled_data[, .(
-    sampled_content = paste(content_clean, collapse = sep)
-  ), by = account_id]
+  if (!all(all_vars %in% names(post_data))) {
+    stop("Missing required variables in 'post_data': ",
+         paste(setdiff(all_vars, names(post_data)), collapse = ", "))
+  }
   
+  # Clean text function
+  clean_text <- function(text, max_length) {
+    text |>
+      stringr::str_replace_all("([[:punct:]])\\1{1,}", "\\1") |>
+      stringr::str_remove_all("\\p{Extended_Pictographic}") |>
+      stringr::str_remove_all("\\b[a-fA-F0-9]{32,}\\b") |>
+      stringr::str_remove_all("\\b\\d+\\b") |>
+      stringr::str_replace_all("(?<!#)\\d", "") |>
+      stringr::str_replace_all("[\r\n\t]+", " ") |>
+      stringr::str_squish() |>
+      stringr::str_trunc(width = max_length, ellipsis = "...")
+  }
   
-  ### Step 2: Bind to nodes_list
+  # Clean content + additional text vars
+  text_vars <- c("content", additional_text_vars)
+  clean_var_lookup <- paste0(text_vars, "_clean")
+  for (i in seq_along(text_vars)) {
+    post_data[[clean_var_lookup[i]]] <- clean_text(post_data[[text_vars[i]]], max_text_length)
+  }
   
-  # Dropping existing sample
-  if("sampled_content" %in% names(groups_data$node_list)) groups_data$node_list[, sampled_content := NULL]
+  # Optionally clean account_name
+  if (clean_name) {
+    post_data[["account_name_clean"]] <- clean_text(post_data[["account_name"]], max_text_length)
+  } else {
+    post_data[["account_name_clean"]] <- post_data[["account_name"]]
+  }
   
-
+  # Filter short posts
+  post_data <- post_data[nchar(content_clean) >= min_chars]
   
-  if (verbose) cli::cli_inform("Step 2: Merging {sample_n} sampled posts to 'groups_data$node_list' by 'account_id'...\n")
-  groups_data$node_list <- merge(x = groups_data$node_list, y = content_sample, by = "account_id", all.x = T)
+  # Sample posts per community and account
+  sampled_dt <- post_data[
+    , {
+      acc_limited <- .SD[, utils::head(.SD, max_n_per_account), by = account_id]
+      n_total <- nrow(acc_limited)
+      n_sample <- min(max(min_n, ceiling(n_total * sampling_ratio)), max_n)
+      acc_limited[sample(.N, min(.N, n_sample))]
+    },
+    by = community
+  ]
   
-  ### Step 3: Prepare names and account bios
+  # Create markdown-style output per community
+  dt_out <- sampled_dt[
+    , {
+      post_subset <- .SD[, c("account_name_clean", clean_var_lookup), with = FALSE]
+      rows <- apply(post_subset, 1, function(row) {
+        paste0("- ", row[["account_name_clean"]], ": ", paste(row[-1], collapse = " | "))
+      })
+      text_block <- paste(rows, collapse = " | ")
+      token_estimate <- as.integer(round(length(strsplit(text_block, "\\s+")[[1]]) * 1.3))
+      list(
+        text = text_block,
+        sampled_post_ids = list(.SD[["post_id"]]),  # now stored as list column
+        approx_tokens = token_estimate
+      )
+    },
+    by = community
+  ]
   
-  if (verbose) cli::cli_inform("Step 3: Prepare names and bios...\n")
-  groups_data$node_list$account_name_full_clean <- clean_text(groups_data$node_list$account_name_full, trunc_width = trunc_width)
-  groups_data$node_list$account_description_clean <- clean_text(groups_data$node_list$account_description, trunc_width = trunc_width)
-  groups_data$node_list$account_location_clean <- clean_text(groups_data$node_list$account_location, trunc_width = trunc_width)
+  if (verbose) {
+    cli::cli_inform("Returning {nrow(dt_out)} communities with sampled posts and metadata.")
+  }
   
-  
-  ### Step 4: Bind the text info:
-  groups_data$node_list[, account_text_prep := paste(
-    "[name:] ", account_name_full_clean,
-    " [loc:] ", account_location_clean,
-    " [bio:] ", account_description_clean,
-    " [posts:] ", sampled_content, 
-    sep = ""
-  ) |> stringr::str_replace_all(" NA ", " ")]
-  
-  ### Return
-  return(groups_data)
-  
-}
-
-
-
-
-
-
-#' Prepare and Aggregate Community Texts
-#'
-#' This function prepares and aggregates text data for each community within a `groups_data` object. It first processes individual 
-#' account data, then samples accounts within each community to create a summarized text field for the community, including 
-#' sampled and all account identifiers.
-#'
-#' @param groups_data A list containing `post_data` and `node_list` data tables, where `post_data` includes posts associated with each account, and `node_list` includes account metadata.
-#' @param sample_n Numeric. The number of posts to sample per account. Defaults to 5.
-#' @param sep Character. A separator to use between sampled posts or account identifiers in the aggregated output. Defaults to `" + "`.
-#' @param trunc_width Numeric. The maximum character width for truncating texts. Set to `NULL` for no truncation. Defaults to 100.
-#' @param min_n_char Numeric. The minimum number of characters a post must have to be included in sampling. Defaults to 5.
-#' @param sample_n_users Numeric. The number of accounts to sample per community. Defaults to 10.
-#' @param verbose Logical. If `TRUE`, provides informational messages about each processing step. Defaults to `TRUE`.
-#' @param seed Numeric. A seed for random sampling, ensuring reproducibility. Defaults to 42.
-#'
-#' @return A modified version of `groups_data` with an additional `community_sample` data table. This table includes:
-#' - `sampled_content`: Aggregated text data from sampled accounts within each community.
-#' - `sampled_accounts`: Account IDs of the sampled accounts within each community.
-#' - `all_accounts`: All account IDs within each community.
-#' - `community_size`: The total number of accounts within each community.
-#'
-#' @details
-#' The function proceeds through the following steps:
-#' 1. Calls `prepare_account_texts()` to clean and sample text data for individual accounts.
-#' 2. Samples up to `sample_n_users` accounts per community to create a summarized text representation for the community.
-#' 3. Aggregates sampled text data and stores all account IDs and the community size within each community.
-#'
-#' @seealso \code{\link{prepare_account_texts}} for individual account-level text preparation.
-#'
-#' @export
-
-prepare_community_texts <- function(groups_data,
-                                    sample_n = 5,
-                                    sep = " + ",
-                                    trunc_width = 100,
-                                    min_n_char = 5,
-                                    sample_n_users = 10,
-                                    verbose = TRUE,
-                                    seed = 42){
-  
-  
-  prepared_text_data <- prepare_account_texts(groups_data = groups_data, 
-                                              sample_n = sample_n, 
-                                              sep = sep, 
-                                              trunc_width = trunc_width, 
-                                              min_n_char = min_n_char, 
-                                              verbose = verbose, 
-                                              seed = seed
-  )
-  
-  groups_data <- prepared_text_data
-  
-  
-  ### Sampling users 
-  
-  if (verbose) cli::cli_inform("Sampling users from communities...\n")
-  
-  
-  # Create a sampled subset of user data
-  set.seed(seed)
-  sampled_data <- prepared_text_data$node_list[, .SD[sample(.N, min(.N, sample_n_users))], by = community]
-  
-  # Aggregate the sampled subset to create the variables
-  content_sample <- sampled_data[, .(
-    sampled_content = paste(account_text_prep, collapse = sep),
-    sampled_accounts = paste(account_id, collapse = "; ")
-  ), by = community]
-  
-  
-  ### Store community size
-  content_sample[ , all_accounts := groups_data$node_list[, paste(account_id, collapse = "; "), by=community][["V1"]]]
-  content_sample[ , community_size := groups_data$node_list[, .N, by=community][["N"]]]
-  
-  # Store as
-  groups_data$community_sample <- content_sample
+  groups_data$community_content <- dt_out
   
   return(groups_data)
 }
-
 
 
 
