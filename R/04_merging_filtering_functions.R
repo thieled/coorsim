@@ -326,172 +326,109 @@ augment_groups_data <- function(
 
 
 
-#' Filter and reduce a groups_data object by edge, time, similarity, or node-based constraints
+#' Filter and reduce a `groups_data` object by edge, time, similarity, or node-based constraints
 #'
-#' This function filters the elements of a `groups_data` object (typically returned by `coorsim_detect_groups()`)
-#' according to user-specified thresholds for edge weight, similarity, time window, community size, node participation,
-#' and node degree. It conditionally re-runs the group detection if thresholds on similarity or time window are stricter
-#' than originally set. The returned object includes only the valid nodes and edges across all contained components.
+#' This function filters a `groups_data` object (typically returned by `coorsim::coorsim_detect_groups()`)
+#' according to user-specified thresholds. If stricter time or similarity constraints are provided,
+#' it will re-run group detection. At the end, it attaches a `filter` list to the returned object
+#' that records all active filter parameters.
 #'
-#' @param groups_data A named list created by `coorsim::coorsim_detect_groups()` containing elements like `graph`,
-#'   `communities`, `edge_list`, `node_list`, optionally `sim_dt` and `post_data`, and a `params` list.
-#' @param edge_weight Numeric. Keep only edges with `weight >= edge_weight`.
-#' @param time_window Integer (seconds). Re-runs group detection using only links with `time_diff <= time_window`.
-#' @param min_simil Numeric. Re-runs group detection using only links with `similarity >= min_simil`.
-#' @param min_comm_size Integer. Keep only communities of size at least this value.
-#' @param min_participation Integer. Keep only nodes that appear in at least this number of edges (as `account_id`).
-#' @param min_degree Integer. Keep only nodes with degree >= this value.
-#' @param verbose Logical. If TRUE, progress messages are printed using `cli::cli_inform()`.
+#' @param groups_data A named list from `coorsim::coorsim_detect_groups()` with `graph`, `communities`, `edge_list`, `node_list`, etc.
+#' @param edge_weight Numeric. Minimum edge weight to retain.
+#' @param time_window Integer. Max seconds between coordinated posts (triggers re-detection).
+#' @param min_simil Numeric. Minimum cosine similarity between posts (triggers re-detection).
+#' @param min_comm_size Integer. Minimum size of communities to keep.
+#' @param min_degree Integer. Minimum node degree to retain.
+#' @param communities_index Integer vector. Community indices to keep.
+#' @param quantile_accounts Numeric. Top quantile of communities by account count.
+#' @param quantile_posts Numeric. Top quantile of communities by post count.
+#' @param top_n_accounts Integer. Top N communities by account count.
+#' @param top_n_posts Integer. Top N communities by post count.
+#' @param verbose Logical. Whether to print progress updates using `cli::cli_inform()`.
 #'
-#' @return A filtered `groups_data` list with updated elements based on the applied constraints.
-#'
-#' @import data.table
+#' @return A filtered `groups_data` list with a new `filter` element listing all applied parameters.
 #' @export
 filter_groups_data <- function(groups_data,
                                edge_weight = NULL,
                                time_window = NULL,
                                min_simil = NULL,
                                min_comm_size = NULL,
-                               min_participation = NULL,
                                min_degree = NULL,
-                               verbose = T) {
+                               communities_index = NULL,
+                               quantile_accounts = NULL,
+                               quantile_posts = NULL,
+                               top_n_accounts = NULL,
+                               top_n_posts = NULL,
+                               verbose = TRUE) {
   # Check minimum requirements
-  req_elements <- c(
-    "graph",
-    "communities",
-    "edge_list",
-    "node_list"
-  )
-
+  req_elements <- c("graph", "communities", "edge_list", "node_list")
   if (!all(req_elements %in% names(groups_data))) stop("Not all required elements provided in 'groups_data'.")
-
-  ### Function to subset all elements after node-based filtering
-
-  subset_after_node_filter <- function(groups_data,
-                                       valid_accounts) {
-    ## Extract elements
-    g <- groups_data$graph
-    communities <- groups_data$communities
-    edge_list <- data.table::copy(groups_data$edge_list)
-    node_list <- data.table::copy(groups_data$node_list)
-
-    # 1. Filter the igraph graph object `g`
-    g <- igraph::induced_subgraph(g, vids = igraph::V(g)[name %in% valid_accounts])
-
-    # 2. Filter the igraph communities object `communities`
-    # Extract membership only for valid nodes
-    filtered_membership <- igraph::membership(communities)[names(igraph::membership(communities)) %in% valid_accounts]
-    # Recreate the community structure
+  
+  # Internal function to subset filtered groups_data
+  subset_after_node_filter <- function(groups_data, valid_accounts) {
+    g <- igraph::induced_subgraph(groups_data$graph, vids = igraph::V(groups_data$graph)[name %in% valid_accounts])
+    filtered_membership <- igraph::membership(groups_data$communities)[names(igraph::membership(groups_data$communities)) %in% valid_accounts]
     communities <- igraph::make_clusters(g, filtered_membership)
-
-    # 3. Filter the data.table `edge_list`
-    edge_list <- edge_list[account_id %in% valid_accounts & account_id_y %in% valid_accounts]
-
-    # 4. Filter the data.table `edge_list`
-    node_list <- node_list[account_id %in% valid_accounts]
-
-    # 5. Filter the data.table `post_data`
-    if ("post_data" %in% names(groups_data)) {
-      post_data <- data.table::copy(groups_data$post_data)
-      post_data <- post_data[account_id %in% valid_accounts]
-    } else {
-      post_data <- NULL
-    }
-
-    # 6. Filter sim_dt
-    if ("sim_dt" %in% names(groups_data)) {
-      sim_dt <- data.table::copy(groups_data$sim_dt)
-      sim_dt <- sim_dt[account_id %in% valid_accounts & account_id_y %in% valid_accounts]
-    } else {
-      sim_dt <- NULL
-    }
-
-    groups_data_filtered <- list(
+    edge_list <- groups_data$edge_list[account_id %in% valid_accounts & account_id_y %in% valid_accounts]
+    node_list <- groups_data$node_list[account_id %in% valid_accounts]
+    post_data <- if ("post_data" %in% names(groups_data)) groups_data$post_data[account_id %in% valid_accounts] else NULL
+    sim_dt <- if ("sim_dt" %in% names(groups_data)) groups_data$sim_dt[account_id %in% valid_accounts & account_id_y %in% valid_accounts] else NULL
+    
+    list(
       graph = g,
       communities = communities,
       edge_list = edge_list,
-      sim_dt = sim_dt,
       node_list = node_list,
       post_data = post_data,
+      sim_dt = sim_dt,
       params = groups_data$params
     )
-
-    return(groups_data_filtered)
   }
-
-
-  ### FILTERING ON EDGES
-
-  # A) Filter by edge_weigth
-
+  
+  # Filter by edge weight
   if (!is.null(edge_weight)) {
     edge_list <- data.table::copy(groups_data$edge_list)
-
     n_prev <- nrow(edge_list)
-
     edge_list_new <- edge_list[weight >= edge_weight]
-
     n_drop <- n_prev - nrow(edge_list_new)
-
     if (verbose) cli::cli_inform("Dropping n = {n_drop} edges by edge_weight >= {edge_weight}.")
-
-    # Create a data.table of nodes
+    
     node_list <- data.table::copy(groups_data$node_list)
-    node_list_new <- data.table::data.table(account_id = unique(c(edge_list_new$account_id, edge_list_new$account_id_y)))
-    node_list_new <- merge(node_list_new, node_list, by = "account_id", all.x = T)
-
+    node_list_new <- data.table(account_id = unique(c(edge_list_new$account_id, edge_list_new$account_id_y)))
+    node_list_new <- merge(node_list_new, node_list, by = "account_id", all.x = TRUE)
     if ("N" %in% names(node_list_new)) node_list_new[, N := NULL]
-    if ("params" %in% names(groups_data)) min_comm_size <- groups_data[["params"]][["min_comm_size"]]
-    if (is.null(min_comm_size)) min_comm_size <- 2
-
-    keep_accounts <- unique(node_list_new[
-      , .N,
-      by = community
-    ][
-      N >= min_comm_size
-    ][
-      node_list_new,
-      on = "community", nomatch = 0
-    ][, account_id])
-
-    groups_data <- subset_after_node_filter(
-      groups_data = groups_data,
-      valid_accounts = keep_accounts
-    )
-
+    
+    if (is.null(min_comm_size)) min_comm_size <- groups_data$params$min_comm_size %||% 2
+    
+    keep_accounts <- unique(node_list_new[, .N, by = community][
+      N >= min_comm_size][node_list_new, on = "community", nomatch = 0][, account_id])
+    
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
     groups_data$edge_list <- edge_list_new
   }
-
-  # B) Filter by time window or min_simil
-
+  
+  # Filter by stricter similarity or time window
   if (!is.null(time_window) || !is.null(min_simil)) {
-    if (!"sim_dt" %in% names(groups_data)) stop("No 'sim_dt' found. Filtering by 'time_window' not possible.")
-
+    if (!"sim_dt" %in% names(groups_data)) stop("No 'sim_dt' found. Filtering by 'time_window' or 'min_simil' not possible.")
+    
     sim_dt <- data.table::copy(groups_data$sim_dt)
-
     og_time_window <- sim_dt$param_time_window[[1]]
     og_min_simil <- sim_dt$param_min_simil[[1]]
-
-    if ((is.null(time_window) && og_time_window > time_window) ||
-      (is.null(min_simil) && og_min_simil > min_simil)) {
+    
+    if ((!is.null(time_window) && time_window < og_time_window) ||
+        (!is.null(min_simil) && min_simil > og_min_simil)) {
+      
       if (!is.null(time_window)) sim_dt <- sim_dt[time_diff <= time_window]
       if (!is.null(min_simil)) sim_dt <- sim_dt[similarity >= min_simil]
-
+      
       node_list <- data.table::copy(groups_data$node_list)
       user_data <- node_list[, .SD, .SDcols = grep("^account_", names(node_list), value = TRUE)]
       other_user_vars <- setdiff(names(user_data), c("account_id", "account_name"))
-
-      return_post_dt <- ifelse("post_data" %in% names(groups_data), T, F)
-
-      if (verbose) cli::cli_inform("Filtering by 'time_window' = {time_window} and 'min_simil' = {min_simil}. \n
-                                Requires to re-run group detection.")
-
-      if ("params" %in% names(groups_data)) {
-        params <- groups_data$params
-      } else {
-        stop("Re-running group detection without 'params' in groups_data not possible. Please re-run manually.")
-      }
-
+      return_post_dt <- "post_data" %in% names(groups_data)
+      
+      if (verbose) cli::cli_inform("Filtering by 'time_window' = {time_window} and 'min_simil' = {min_simil}. Re-running group detection.")
+      
+      params <- groups_data$params
       groups_data <- coorsim_detect_groups(
         simdt = sim_dt,
         user_data = user_data,
@@ -506,82 +443,112 @@ filter_groups_data <- function(groups_data,
         verbose = verbose,
         min_comm_size = min_comm_size
       )
-    } else {
-      cli::cli_inform("Specified min_simil or time_window are not smaller than in the provided sim_dt.")
+    } else if (verbose) {
+      cli::cli_inform("Specified min_simil or time_window are not stricter than in the provided sim_dt.")
     }
   }
-
-  ### Node-based filters
-
-  # C) Filter by min_participation
-  if (!is.null(min_participation)) {
-    n_prev <- length(unique(groups_data$node_list$account_id))
-
-    # Count occurrences of each account_id and account_id_y
-    keep_accounts <- groups_data$node_list[
-      , .N,
-      by = account_id
-    ][N >= min_participation, account_id]
-
-    n_drop <- n_prev - length(keep_accounts)
-
-    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes by min_participation >= {min_participation}.")
-    groups_data <- subset_after_node_filter(
-      groups_data = groups_data,
-      valid_accounts = keep_accounts
-    )
+  
+  # Filter by community index
+  if (!is.null(communities_index)) {
+    node_list <- data.table::copy(groups_data$node_list)
+    keep_accounts <- unique(node_list[community %in% communities_index, account_id])
+    n_drop <- nrow(node_list) - length(keep_accounts)
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Keeping communities of index {communities_index}")
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
-
-  # D) Filter by min_comm_size
+  
+  # Filter by min_comm_size
   if (!is.null(min_comm_size)) {
-    n_prev <- length(unique(groups_data$node_list$account_id))
-
     node_list <- data.table::copy(groups_data$node_list)
     if ("N" %in% names(node_list)) node_list[, N := NULL]
-
-    keep_accounts <- unique(node_list[
-      , .N,
-      by = community
-    ][
-      N >= min_comm_size
-    ][
-      node_list,
-      on = "community", nomatch = 0
-    ][, account_id])
-
-    n_drop <- n_prev - length(keep_accounts)
-
+    keep_accounts <- unique(node_list[, .N, by = community][
+      N >= min_comm_size][node_list, on = "community", nomatch = 0][, account_id])
+    n_drop <- nrow(node_list) - length(keep_accounts)
     if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes by min_comm_size >= {min_comm_size}.")
-    groups_data <- subset_after_node_filter(
-      groups_data = groups_data,
-      valid_accounts = keep_accounts
-    )
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
-
-  # E) Filter by degree
+  
+  # Filter by min_degree
   if (!is.null(min_degree)) {
-    n_prev <- length(unique(groups_data$node_list$account_id))
-
     edge_list <- data.table::copy(groups_data$edge_list)
-
-    # Count degree per node
-    keep_accounts <- unique(edge_list[
-      , .(account_id = c(account_id, account_id_y))
-    ][
-      , .N,
-      by = account_id
-    ][
-      N >= min_degree
-    ][, account_id])
-
-    n_drop <- n_prev - length(keep_accounts)
-
+    keep_accounts <- unique(edge_list[, .(account_id = c(account_id, account_id_y))][
+      , .N, by = account_id][N >= min_degree, account_id])
+    n_drop <- nrow(groups_data$node_list) - length(keep_accounts)
     if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes by min_degree >= {min_degree}.")
-    groups_data <- subset_after_node_filter(
-      groups_data = groups_data,
-      valid_accounts = keep_accounts
-    )
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
-
+  
+  # Quantile filter by account count
+  if (!is.null(quantile_accounts)) {
+    node_list <- data.table::copy(groups_data$node_list)
+    if ("N" %in% names(node_list)) node_list[, N := NULL]
+    keep_accounts <- unique(filter_ntile(node_list[, .N, by = community], "N", quantile_accounts)[
+      node_list, on = "community", nomatch = 0][, account_id])
+    n_drop <- nrow(node_list) - length(keep_accounts)
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Dropping lower {quantile_accounts} quantile of communities by account count.")
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
+  }
+  
+  # Quantile filter by post count
+  if (!is.null(quantile_posts)) {
+    node_list <- data.table::copy(groups_data$node_list)
+    if ("post_data" %in% names(groups_data)) {
+      post_data <- data.table::copy(groups_data$post_data)
+      post_size <- post_data[, .N, by = community]
+    } else if ("sim_dt" %in% names(groups_data)) {
+      sim_dt <- data.table::copy(groups_data$sim_dt)
+      post_size <- unique(sim_dt[, .(account_id = c(account_id, account_id_y), post_id = c(post_id, post_id_y))])[
+        node_list[, .(account_id, community)], on = "account_id"][, .N, by = community]
+    } else stop("Neither 'sim_dt' nor 'post_data' found. Filtering by post quantile not possible.")
+    
+    keep_accounts <- unique(filter_ntile(post_size, "N", quantile_posts)[
+      node_list, on = "community", nomatch = 0][, account_id])
+    n_drop <- nrow(node_list) - length(keep_accounts)
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Dropping lower {quantile_posts} quantile of communities by post count.")
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
+  }
+  
+  # Top-n posts per community
+  if (!is.null(top_n_posts)) {
+    node_list <- data.table::copy(groups_data$node_list)
+    if ("post_data" %in% names(groups_data)) {
+      post_data <- data.table::copy(groups_data$post_data)
+      post_size <- post_data[, .N, by = community][order(-N)][1:top_n_posts]
+    } else if ("sim_dt" %in% names(groups_data)) {
+      sim_dt <- data.table::copy(groups_data$sim_dt)
+      post_size <- unique(sim_dt[, .(account_id = c(account_id, account_id_y), post_id = c(post_id, post_id_y))])[
+        node_list[, .(account_id, community)], on = "account_id"][, .N, by = community][order(-N)][1:top_n_posts]
+    } else stop("No post count data found.")
+    
+    keep_accounts <- unique(node_list[community %in% post_size$community, account_id])
+    n_drop <- nrow(node_list) - length(keep_accounts)
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Keeping top {top_n_posts} communities by post count.")
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
+  }
+  
+  # Top-n accounts per community
+  if (!is.null(top_n_accounts)) {
+    node_list <- data.table::copy(groups_data$node_list)
+    acc_size <- node_list[, .N, by = community][order(-N)][1:top_n_accounts]
+    keep_accounts <- unique(node_list[community %in% acc_size$community, account_id])
+    n_drop <- nrow(node_list) - length(keep_accounts)
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Keeping top {top_n_accounts} communities by account count.")
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
+  }
+  
+  # Store active filter parameters
+  groups_data$filter <- list(
+    edge_weight = edge_weight,
+    time_window = time_window,
+    min_simil = min_simil,
+    min_comm_size = min_comm_size,
+    min_degree = min_degree,
+    communities_index = communities_index,
+    quantile_accounts = quantile_accounts,
+    quantile_posts = quantile_posts,
+    top_n_accounts = top_n_accounts,
+    top_n_posts = top_n_posts
+  )
+  
   return(groups_data)
 }

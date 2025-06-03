@@ -10,55 +10,50 @@ augment_groups_data(
   user_data,
   post_id = NULL,
   account_id = NULL,
-  content = NULL,
   other_post_vars = NULL,
   other_user_vars = NULL,
-  sample_content = FALSE,
-  sample_n = 10,
-  sep = " +++ ",
-  seed = 42,
+  sim_dt_community = TRUE,
   verbose = FALSE
 )
 }
 \arguments{
 \item{groups_data}{A list with at least one element `node_list` (a `data.table` containing node information).
-Optionally, it may also contain `post_data` (a `data.table` of post information).}
+Optionally, it may also contain `post_data` and `sim_dt`, which will be augmented.}
 
 \item{post_data}{A `data.table` containing additional post data to be merged.}
 
 \item{user_data}{A `data.table` containing user data to be merged.}
 
-\item{post_id}{Optional. Column name in `post_data` to be renamed to 'post_id' for joining.}
+\item{post_id}{Optional. Column name in `post_data` to be renamed to `'post_id'` for joining.}
 
-\item{account_id}{Optional. Column name in `user_data` and `groups_data` to be renamed to 'account_id' for joining.}
-
-\item{content}{Optional. Column name in `post_data` containing post content, renamed to 'content'.}
+\item{account_id}{Optional. Column name in `user_data` and `groups_data` to be renamed to `'account_id'` for joining.}
 
 \item{other_post_vars}{Optional. Additional columns to retain from `post_data`.}
 
 \item{other_user_vars}{Optional. Additional columns to retain from `user_data`.}
 
-\item{sample_content}{Logical. If `TRUE`, samples content from `post_data` by `account_id` and merges sampled text into `node_list`.}
-
-\item{sample_n}{Integer. Number of posts to sample per `account_id` if `sample_content` is `TRUE`. Defaults to 10.}
-
-\item{sep}{Character. Separator used to concatenate sampled content. Defaults to " +++ ".}
-
-\item{seed}{Integer. Random seed for reproducibility of sampled content. Defaults to 42.}
+\item{sim_dt_community}{Logical. If `TRUE`, community identifiers from `node_list` will be joined onto `sim_dt`,
+matching on `account_id` and `account_id_y`. The resulting `sim_dt` will be reordered
+to follow the structure: x-side → similarity → y-side → parameters.}
 
 \item{verbose}{Logical. If `TRUE`, provides detailed output about each processing step.}
 }
 \value{
-A list, `groups_data`, with the following modifications:
-  - `post_data` augmented with user information and additional post columns, if present in `groups_data`.
-  - `node_list` augmented with user data and optionally, sampled content from `post_data`.
+A list, `groups_data`, with the following possible modifications:
+\itemize{
+  \item \code{post_data}: augmented with user information and additional post columns, if present.
+  \item \code{node_list}: augmented with user data and optionally sampled content from post data.
+  \item \code{sim_dt}: (if \code{sim_dt_community = TRUE}) augmented with \code{community} and \code{community_y}
+        for \code{account_id} and \code{account_id_y}, and columns reordered accordingly.
+}
 }
 \description{
 This function merges additional post and user data into a grouped data structure, `groups_data`.
-It supports renaming columns for consistency, de-duplication, and optional content sampling.
+It supports renaming columns for consistency, de-duplication, and optional community annotation in the similarity table.
 }
 \details{
-This function harmonizes column names and performs left joins to add relevant data. When `sample_content`
-is `TRUE`, it samples `sample_n` posts from `post_data` per `account_id`, concatenates them with the specified separator `sep`,
-and adds the resulting strings to `node_list`.
+This function standardizes column names, selects relevant fields, and performs efficient `data.table` joins.
+User-level data is prefixed with \code{"account_"} before merging. If \code{sim_dt_community = TRUE}, community IDs
+are merged into `sim_dt` and the column order is standardized to place the x-side account and post information first,
+followed by similarity metrics, y-side information, and parameter columns.
 }
