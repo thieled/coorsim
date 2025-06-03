@@ -2,7 +2,7 @@
 % Please edit documentation in R/04_merging_filtering_functions.R
 \name{filter_groups_data}
 \alias{filter_groups_data}
-\title{Filter and reduce a groups_data object by edge, time, similarity, or node-based constraints}
+\title{Filter and reduce a `groups_data` object by edge, time, similarity, or node-based constraints}
 \usage{
 filter_groups_data(
   groups_data,
@@ -10,35 +10,46 @@ filter_groups_data(
   time_window = NULL,
   min_simil = NULL,
   min_comm_size = NULL,
-  min_participation = NULL,
   min_degree = NULL,
-  verbose = T
+  communities_index = NULL,
+  quantile_accounts = NULL,
+  quantile_posts = NULL,
+  top_n_accounts = NULL,
+  top_n_posts = NULL,
+  verbose = TRUE
 )
 }
 \arguments{
-\item{groups_data}{A named list created by `coorsim::coorsim_detect_groups()` containing elements like `graph`,
-`communities`, `edge_list`, `node_list`, optionally `sim_dt` and `post_data`, and a `params` list.}
+\item{groups_data}{A named list from `coorsim::coorsim_detect_groups()` with `graph`, `communities`, `edge_list`, `node_list`, etc.}
 
-\item{edge_weight}{Numeric. Keep only edges with `weight >= edge_weight`.}
+\item{edge_weight}{Numeric. Minimum edge weight to retain.}
 
-\item{time_window}{Integer (seconds). Re-runs group detection using only links with `time_diff <= time_window`.}
+\item{time_window}{Integer. Max seconds between coordinated posts (triggers re-detection).}
 
-\item{min_simil}{Numeric. Re-runs group detection using only links with `similarity >= min_simil`.}
+\item{min_simil}{Numeric. Minimum cosine similarity between posts (triggers re-detection).}
 
-\item{min_comm_size}{Integer. Keep only communities of size at least this value.}
+\item{min_comm_size}{Integer. Minimum size of communities to keep.}
 
-\item{min_participation}{Integer. Keep only nodes that appear in at least this number of edges (as `account_id`).}
+\item{min_degree}{Integer. Minimum node degree to retain.}
 
-\item{min_degree}{Integer. Keep only nodes with degree >= this value.}
+\item{communities_index}{Integer vector. Community indices to keep.}
 
-\item{verbose}{Logical. If TRUE, progress messages are printed using `cli::cli_inform()`.}
+\item{quantile_accounts}{Numeric. Top quantile of communities by account count.}
+
+\item{quantile_posts}{Numeric. Top quantile of communities by post count.}
+
+\item{top_n_accounts}{Integer. Top N communities by account count.}
+
+\item{top_n_posts}{Integer. Top N communities by post count.}
+
+\item{verbose}{Logical. Whether to print progress updates using `cli::cli_inform()`.}
 }
 \value{
-A filtered `groups_data` list with updated elements based on the applied constraints.
+A filtered `groups_data` list with a new `filter` element listing all applied parameters.
 }
 \description{
-This function filters the elements of a `groups_data` object (typically returned by `coorsim_detect_groups()`)
-according to user-specified thresholds for edge weight, similarity, time window, community size, node participation,
-and node degree. It conditionally re-runs the group detection if thresholds on similarity or time window are stricter
-than originally set. The returned object includes only the valid nodes and edges across all contained components.
+This function filters a `groups_data` object (typically returned by `coorsim::coorsim_detect_groups()`)
+according to user-specified thresholds. If stricter time or similarity constraints are provided,
+it will re-run group detection. At the end, it attaches a `filter` list to the returned object
+that records all active filter parameters.
 }

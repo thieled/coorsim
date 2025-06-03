@@ -394,7 +394,7 @@ filter_groups_data <- function(groups_data,
     if (verbose) cli::cli_inform("Dropping n = {n_drop} edges by edge_weight >= {edge_weight}.")
     
     node_list <- data.table::copy(groups_data$node_list)
-    node_list_new <- data.table(account_id = unique(c(edge_list_new$account_id, edge_list_new$account_id_y)))
+    node_list_new <- data.table::data.table(account_id = unique(c(edge_list_new$account_id, edge_list_new$account_id_y)))
     node_list_new <- merge(node_list_new, node_list, by = "account_id", all.x = TRUE)
     if ("N" %in% names(node_list_new)) node_list_new[, N := NULL]
     
