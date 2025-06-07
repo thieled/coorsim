@@ -340,11 +340,15 @@ augment_groups_data <- function(
 #' @param min_comm_size Integer. Minimum size of communities to keep.
 #' @param min_degree Integer. Minimum node degree to retain.
 #' @param communities_index Integer vector. Community indices to keep.
-#' @param quantile_accounts Numeric. Top quantile of communities by account count.
-#' @param quantile_posts Numeric. Top quantile of communities by post count.
-#' @param top_n_accounts Integer. Top N communities by account count.
-#' @param top_n_posts Integer. Top N communities by post count.
+#' @param quantile_accountwise Numeric. Top quantile of communities by account count.
+#' @param quantile_postwise Numeric. Top quantile of communities by post count.
+#' @param top_n_accountwise Integer. Top N communities by account count.
+#' @param top_n_postwise Integer. Top N communities by post count.
+#' @param stringsimil_factor Numeric or `NULL`. If set, activates an additional filter based on the geometric mean of embedding similarity and string-level similarity. Pairs with a geometric mean below `min_simil * stringsimil_factor` are removed.
+#' @param stringsimil_method Character. String similarity method used by `stringdist::stringsim()`. Common choices are `"cosine"`, `"jaccard"`, or `"lv"`. Defaults to `"cosine"`.
+#' @param stringsimil_qgram Integer. Size of q-grams used for methods like `"cosine"` or `"jaccard"`. Defaults to `3`.
 #' @param verbose Logical. Whether to print progress updates using `cli::cli_inform()`.
+#' @param ... Additional arguments passed to `coorsim_detect_groups()`, triggered after further filtering of `sim_dt`. 
 #'
 #' @return A filtered `groups_data` list with a new `filter` element listing all applied parameters.
 #' @export
@@ -355,11 +359,15 @@ filter_groups_data <- function(groups_data,
                                min_comm_size = NULL,
                                min_degree = NULL,
                                communities_index = NULL,
-                               quantile_accounts = NULL,
-                               quantile_posts = NULL,
-                               top_n_accounts = NULL,
-                               top_n_posts = NULL,
-                               verbose = TRUE) {
+                               quantile_accountwise = NULL,
+                               quantile_postwise = NULL,
+                               top_n_accountwise = NULL,
+                               top_n_postwise = NULL,
+                               stringsimil_factor = NULL,
+                               stringsimil_method = "cosine",
+                               stringsimil_qgram = 3,
+                               verbose = TRUE,
+                               ...) {
   # Check minimum requirements
   req_elements <- c("graph", "communities", "edge_list", "node_list")
   if (!all(req_elements %in% names(groups_data))) stop("Not all required elements provided in 'groups_data'.")
@@ -421,6 +429,34 @@ filter_groups_data <- function(groups_data,
       if (!is.null(time_window)) sim_dt <- sim_dt[time_diff <= time_window]
       if (!is.null(min_simil)) sim_dt <- sim_dt[similarity >= min_simil]
       
+      # Get additional filtering by stringdist::stringsimil()
+      if(!is.null(stringsimil_factor)){
+        
+        if(verbose) cli::cli_progress_step(msg = "Applying additional string similarity filter: {stringsimil_method} similarity
+                                  of {stringsimil_qgram}-grams. String-simil factor at: {stringsimil_factor}.",
+                                           msg_done = "Applied additional string similarity filter: {stringsimil_method} similarity
+                                  of {stringsimil_qgram}-grams. String-simil factor at: {stringsimil_factor}.")
+        
+        og_nrow <- nrow(sim_dt)
+        
+        sim_dt <- sim_dt[, string_similarity := stringdist::stringsim(textclean::replace_emoji(content), 
+                                                                      textclean::replace_emoji(content_y), 
+                                                                      method = stringsimil_method, 
+                                                                      q = stringsimil_qgram,
+                                                                      nthread = parallel::detectCores() - 2)][
+                                                                        , geom_mean_simil := sqrt(similarity * string_similarity)
+                                                                      ][, cutoff := param_min_simil * stringsimil_factor][
+                                                                        geom_mean_simil >= cutoff
+                                                                      ]
+        
+        new_nrow <- nrow(sim_dt)
+        
+        
+        if(verbose) cli::cli_progress_done()
+        if(verbose) cli::cli_inform("Dropped {og_nrow - new_nrow} pairs.")
+        
+      }
+      
       node_list <- data.table::copy(groups_data$node_list)
       user_data <- node_list[, .SD, .SDcols = grep("^account_", names(node_list), value = TRUE)]
       other_user_vars <- setdiff(names(user_data), c("account_id", "account_name"))
@@ -428,13 +464,31 @@ filter_groups_data <- function(groups_data,
       
       if (verbose) cli::cli_inform("Filtering by 'time_window' = {time_window} and 'min_simil' = {min_simil}. Re-running group detection.")
       
-      params <- groups_data$params
-      groups_data <- coorsim_detect_groups(
-        simdt = sim_dt,
+      # Pass on new arguments from ... 
+      dot_args <- list(...)
+      args <- c(
+        dot_args,
+        if (!is.null(time_window)) list(time_window = time_window),
+        if (!is.null(min_simil)) list(min_simil = min_simil)
+      )
+       
+      # otherwise take parameters from groups_data
+      if (exists("args") && is.list(args) && length(args) > 0) {
+        params <- utils::modifyList(groups_data$params, args)
+      } else {
+        params <- groups_data$params
+      }
+      
+      # Check if sim_dt has community id
+      sim_dt_community <- "community" %in% names(groups_data$sim_dt)
+      
+      # Re-apply groups detection
+      groups_data_new <- coorsim_detect_groups(
+        simdt = sim_dt[, (intersect(c("community", "community_y"), names(sim_dt))) := NULL],
         user_data = user_data,
         account_id = "account_id",
         account_name = "account_name",
-        other_user_vars = other_user_vars,
+        other_user_vars = NULL,
         edge_weight = edge_weight,
         cluster_method = params$cluster_method,
         resolution = params$resolution,
@@ -443,6 +497,30 @@ filter_groups_data <- function(groups_data,
         verbose = verbose,
         min_comm_size = min_comm_size
       )
+      
+      # Chek if post_data has been augmented
+      if(return_post_dt){
+        post_data <- data.table::copy(groups_data$post_data)
+        other_post_vars <- grep("^account_", 
+                                setdiff(names(post_data), names(groups_data_new$post_data)),
+                                value = T, invert = T)
+      }else{
+        post_data = NULL
+        other_post_vars = NULL
+      }
+      
+      groups_data_new <- coorsim::augment_groups_data(groups_data = groups_data_new, 
+                                                      post_data = post_data,
+                                                      user_data = user_data,
+                                                      other_user_vars = other_user_vars,
+                                                      other_post_vars = other_post_vars, 
+                                                      verbose =  verbose, 
+                                                      sim_dt_community = sim_dt_community)
+      
+      ## Overwrite groups_data object
+      groups_data <- groups_data_new
+      rm(groups_data_new)
+      
     } else if (verbose) {
       cli::cli_inform("Specified min_simil or time_window are not stricter than in the provided sim_dt.")
     }
@@ -479,18 +557,18 @@ filter_groups_data <- function(groups_data,
   }
   
   # Quantile filter by account count
-  if (!is.null(quantile_accounts)) {
+  if (!is.null(quantile_accountwise)) {
     node_list <- data.table::copy(groups_data$node_list)
     if ("N" %in% names(node_list)) node_list[, N := NULL]
-    keep_accounts <- unique(filter_ntile(node_list[, .N, by = community], "N", quantile_accounts)[
+    keep_accounts <- unique(filter_ntile(node_list[, .N, by = community], "N", quantile_accountwise)[
       node_list, on = "community", nomatch = 0][, account_id])
     n_drop <- nrow(node_list) - length(keep_accounts)
-    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Dropping lower {quantile_accounts} quantile of communities by account count.")
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Dropping lower {quantile_accountwise} quantile of communities by account count.")
     groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
   
   # Quantile filter by post count
-  if (!is.null(quantile_posts)) {
+  if (!is.null(quantile_postwise)) {
     node_list <- data.table::copy(groups_data$node_list)
     if ("post_data" %in% names(groups_data)) {
       post_data <- data.table::copy(groups_data$post_data)
@@ -501,38 +579,38 @@ filter_groups_data <- function(groups_data,
         node_list[, .(account_id, community)], on = "account_id"][, .N, by = community]
     } else stop("Neither 'sim_dt' nor 'post_data' found. Filtering by post quantile not possible.")
     
-    keep_accounts <- unique(filter_ntile(post_size, "N", quantile_posts)[
+    keep_accounts <- unique(filter_ntile(post_size, "N", quantile_postwise)[
       node_list, on = "community", nomatch = 0][, account_id])
     n_drop <- nrow(node_list) - length(keep_accounts)
-    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Dropping lower {quantile_posts} quantile of communities by post count.")
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Dropping lower {quantile_postwise} quantile of communities by post count.")
     groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
   
   # Top-n posts per community
-  if (!is.null(top_n_posts)) {
+  if (!is.null(top_n_postwise)) {
     node_list <- data.table::copy(groups_data$node_list)
     if ("post_data" %in% names(groups_data)) {
       post_data <- data.table::copy(groups_data$post_data)
-      post_size <- post_data[, .N, by = community][order(-N)][1:top_n_posts]
+      post_size <- post_data[, .N, by = community][order(-N)][1:top_n_postwise]
     } else if ("sim_dt" %in% names(groups_data)) {
       sim_dt <- data.table::copy(groups_data$sim_dt)
       post_size <- unique(sim_dt[, .(account_id = c(account_id, account_id_y), post_id = c(post_id, post_id_y))])[
-        node_list[, .(account_id, community)], on = "account_id"][, .N, by = community][order(-N)][1:top_n_posts]
+        node_list[, .(account_id, community)], on = "account_id"][, .N, by = community][order(-N)][1:top_n_postwise]
     } else stop("No post count data found.")
     
     keep_accounts <- unique(node_list[community %in% post_size$community, account_id])
     n_drop <- nrow(node_list) - length(keep_accounts)
-    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Keeping top {top_n_posts} communities by post count.")
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Keeping top {top_n_postwise} communities by post count.")
     groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
   
   # Top-n accounts per community
-  if (!is.null(top_n_accounts)) {
+  if (!is.null(top_n_accountwise)) {
     node_list <- data.table::copy(groups_data$node_list)
-    acc_size <- node_list[, .N, by = community][order(-N)][1:top_n_accounts]
+    acc_size <- node_list[, .N, by = community][order(-N)][1:top_n_accountwise]
     keep_accounts <- unique(node_list[community %in% acc_size$community, account_id])
     n_drop <- nrow(node_list) - length(keep_accounts)
-    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Keeping top {top_n_accounts} communities by account count.")
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes. Keeping top {top_n_accountwise} communities by account count.")
     groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
   
@@ -544,10 +622,13 @@ filter_groups_data <- function(groups_data,
     min_comm_size = min_comm_size,
     min_degree = min_degree,
     communities_index = communities_index,
-    quantile_accounts = quantile_accounts,
-    quantile_posts = quantile_posts,
-    top_n_accounts = top_n_accounts,
-    top_n_posts = top_n_posts
+    quantile_accountwise = quantile_accountwise,
+    quantile_postwise = quantile_postwise,
+    top_n_accountwise = top_n_accountwise,
+    top_n_postwise = top_n_postwise,
+    stringsimil_factor = stringsimil_factor,
+    stringsimil_method = ifelse(!is.null(stringsimil_factor), stringsimil_method, NULL),
+    stringsimil_qgram = ifelse(!is.null(stringsimil_factor), stringsimil_qgram, NULL)
   )
   
   return(groups_data)

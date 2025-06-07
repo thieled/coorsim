@@ -70,7 +70,12 @@ utils::globalVariables(c(".",
                          "parsed_json",
                          "is_valid_json",
                          "community_sample",
-                         "text"
+                         "text",
+                         "content_y",
+                         "cutoff",
+                         "geom_mean_simil",
+                         "param_min_simil",
+                         "string_similarity"
                          ))
 
 

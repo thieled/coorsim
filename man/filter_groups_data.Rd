@@ -12,11 +12,15 @@ filter_groups_data(
   min_comm_size = NULL,
   min_degree = NULL,
   communities_index = NULL,
-  quantile_accounts = NULL,
-  quantile_posts = NULL,
-  top_n_accounts = NULL,
-  top_n_posts = NULL,
-  verbose = TRUE
+  quantile_accountwise = NULL,
+  quantile_postwise = NULL,
+  top_n_accountwise = NULL,
+  top_n_postwise = NULL,
+  stringsimil_factor = NULL,
+  stringsimil_method = "cosine",
+  stringsimil_qgram = 3,
+  verbose = TRUE,
+  ...
 )
 }
 \arguments{
@@ -34,15 +38,23 @@ filter_groups_data(
 
 \item{communities_index}{Integer vector. Community indices to keep.}
 
-\item{quantile_accounts}{Numeric. Top quantile of communities by account count.}
+\item{quantile_accountwise}{Numeric. Top quantile of communities by account count.}
 
-\item{quantile_posts}{Numeric. Top quantile of communities by post count.}
+\item{quantile_postwise}{Numeric. Top quantile of communities by post count.}
 
-\item{top_n_accounts}{Integer. Top N communities by account count.}
+\item{top_n_accountwise}{Integer. Top N communities by account count.}
 
-\item{top_n_posts}{Integer. Top N communities by post count.}
+\item{top_n_postwise}{Integer. Top N communities by post count.}
+
+\item{stringsimil_factor}{Numeric or `NULL`. If set, activates an additional filter based on the geometric mean of embedding similarity and string-level similarity. Pairs with a geometric mean below `min_simil * stringsimil_factor` are removed.}
+
+\item{stringsimil_method}{Character. String similarity method used by `stringdist::stringsim()`. Common choices are `"cosine"`, `"jaccard"`, or `"lv"`. Defaults to `"cosine"`.}
+
+\item{stringsimil_qgram}{Integer. Size of q-grams used for methods like `"cosine"` or `"jaccard"`. Defaults to `3`.}
 
 \item{verbose}{Logical. Whether to print progress updates using `cli::cli_inform()`.}
+
+\item{...}{Additional arguments passed to `coorsim_detect_groups()`, triggered after further filtering of `sim_dt`.}
 }
 \value{
 A filtered `groups_data` list with a new `filter` element listing all applied parameters.

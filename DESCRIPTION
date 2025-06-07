@@ -42,7 +42,9 @@ Imports:
     pbapply,
     jsonlite,
     purrr,
-    tibble
+    tibble,
+    stringdist,
+    textclean
 Remotes: 
     JBGruber/rollama
 LinkingTo: Rcpp, RcppArmadillo
