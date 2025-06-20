@@ -326,6 +326,7 @@ augment_groups_data <- function(
 
 
 
+
 #' Filter and reduce a `groups_data` object by edge, time, similarity, or node-based constraints
 #'
 #' This function filters a `groups_data` object (typically returned by `coorsim::coorsim_detect_groups()`)
@@ -338,6 +339,7 @@ augment_groups_data <- function(
 #' @param time_window Integer. Max seconds between coordinated posts (triggers re-detection).
 #' @param min_simil Numeric. Minimum cosine similarity between posts (triggers re-detection).
 #' @param min_comm_size Integer. Minimum size of communities to keep.
+#' @param min_comp_size Integer. Minimum size of network components (number of connected nodes) to keep.
 #' @param min_degree Integer. Minimum node degree to retain.
 #' @param communities_index Integer vector. Community indices to keep.
 #' @param quantile_accountwise Numeric. Top quantile of communities by account count.
@@ -350,6 +352,7 @@ augment_groups_data <- function(
 #' @param stringsimil_ngram Integer. Size of n-grams used for calculating string similarity. Defaults to `3`.
 #' @param nthread Integer. Number of threads used by `stringdist::stringsim()`. Defaults to `10`.
 #' @param verbose Logical. Whether to print progress updates using `cli::cli_inform()`.
+#' @param rerun_detect_groups Logical. Re-run `coorsim_detect_groups()` after filtering? Defaults to `FALSE`.
 #' @param ... Additional arguments passed to `coorsim_detect_groups()`, triggered after further filtering of `sim_dt`. 
 #'
 #' @return A filtered `groups_data` list with a new `filter` element listing all applied parameters.
@@ -359,6 +362,7 @@ filter_groups_data <- function(groups_data,
                                time_window = NULL,
                                min_simil = NULL,
                                min_comm_size = NULL,
+                               min_comp_size = NULL,
                                min_degree = NULL,
                                communities_index = NULL,
                                quantile_accountwise = NULL,
@@ -369,6 +373,7 @@ filter_groups_data <- function(groups_data,
                                stringsimil_method = "cosine",
                                stringsimil_ngram = 3,
                                nthread = 10,
+                               rerun_detect_groups = FALSE,
                                verbose = TRUE,
                                ...) {
   # Check minimum requirements
@@ -481,8 +486,8 @@ filter_groups_data <- function(groups_data,
                                                                     nthread = nthread)]
       
       sim_dt <- sim_dt[, geom_mean_simil := sqrt(similarity * string_similarity)
-                      ][geom_mean_simil >= stringsimil_cutoff][, c("content_clean", "content_clean_y") := NULL]
-       
+      ][geom_mean_simil >= stringsimil_cutoff][, c("content_clean", "content_clean_y") := NULL]
+      
       new_nrow <- nrow(sim_dt)
       
       if(verbose) cli::cli_progress_done()
@@ -594,6 +599,19 @@ filter_groups_data <- function(groups_data,
     groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
   
+  
+  # Filter by min_comp_size
+  if (!is.null(min_comp_size)) {
+    g <- groups_data$graph
+    g <- igraph::induced_subgraph(g, 
+                                  igraph::V(g)[igraph::components(g)$membership %in% 
+                                                 which(igraph::components(g)$csize >= min_comp_size)])
+    keep_accounts <- igraph::V(g) |> names()
+    n_drop <- nrow(groups_data$node_list) - length(keep_accounts)
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes by min_comp_size >= {min_comp_size}.")
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
+  }
+  
   # Filter by min_degree
   if (!is.null(min_degree)) {
     edge_list <- data.table::copy(groups_data$edge_list)
@@ -662,12 +680,86 @@ filter_groups_data <- function(groups_data,
     groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
   
+  
+  # Re-run groups detection if wished
+  if(rerun_detect_groups){
+    
+    node_list <- data.table::copy(groups_data$node_list)
+    sim_dt <- data.table::copy(groups_data$sim_dt)
+    
+    user_data <- node_list[, .SD, .SDcols = grep("^account_", names(node_list), value = TRUE)]
+    other_user_vars <- setdiff(names(user_data), c("account_id", "account_name"))
+    return_post_dt <- "post_data" %in% names(groups_data)
+    
+    if (verbose) cli::cli_inform("Re-running group detection.")
+    
+    # Pass on new arguments from ... 
+    dot_args <- list(...)
+    args <- c(
+      dot_args,
+      if (!is.null(time_window)) list(time_window = time_window),
+      if (!is.null(min_simil)) list(min_simil = min_simil)
+    )
+    
+    # otherwise take parameters from groups_data
+    if (exists("args") && is.list(args) && length(args) > 0) {
+      params <- utils::modifyList(groups_data$params, args)
+    } else {
+      params <- groups_data$params
+    }
+    
+    # Check if sim_dt has community id
+    sim_dt_community <- "community" %in% names(groups_data$sim_dt)
+    
+    # Re-apply groups detection
+    groups_data_new <- coorsim_detect_groups(
+      simdt = sim_dt[, (intersect(c("community", "community_y"), names(sim_dt))) := NULL],
+      user_data = user_data,
+      account_id = "account_id",
+      account_name = "account_name",
+      other_user_vars = NULL,
+      edge_weight = edge_weight,
+      cluster_method = params$cluster_method,
+      resolution = params$resolution,
+      theta = params$theta,
+      return_post_dt = return_post_dt,
+      verbose = verbose,
+      min_comm_size = min_comm_size
+    )
+    
+    # Chek if post_data has been augmented
+    if(return_post_dt){
+      post_data <- data.table::copy(groups_data$post_data)
+      other_post_vars <- grep("^account_", 
+                              setdiff(names(post_data), names(groups_data_new$post_data)),
+                              value = T, invert = T)
+    }else{
+      post_data = NULL
+      other_post_vars = NULL
+    }
+    
+    groups_data_new <- coorsim::augment_groups_data(groups_data = groups_data_new, 
+                                                    post_data = post_data,
+                                                    user_data = user_data,
+                                                    other_user_vars = other_user_vars,
+                                                    other_post_vars = other_post_vars, 
+                                                    verbose =  verbose, 
+                                                    sim_dt_community = sim_dt_community)
+    
+    ## Overwrite groups_data object
+    groups_data <- groups_data_new
+    rm(groups_data_new)
+    
+  } 
+  
+  
   # Store active filter parameters
   groups_data$filter <- list(
     edge_weight = edge_weight,
     time_window = time_window,
     min_simil = min_simil,
     min_comm_size = min_comm_size,
+    min_comp_size = min_comp_size,
     min_degree = min_degree,
     communities_index = communities_index,
     quantile_accountwise = quantile_accountwise,

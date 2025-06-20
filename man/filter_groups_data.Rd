@@ -10,6 +10,7 @@ filter_groups_data(
   time_window = NULL,
   min_simil = NULL,
   min_comm_size = NULL,
+  min_comp_size = NULL,
   min_degree = NULL,
   communities_index = NULL,
   quantile_accountwise = NULL,
@@ -20,6 +21,7 @@ filter_groups_data(
   stringsimil_method = "cosine",
   stringsimil_ngram = 3,
   nthread = 10,
+  rerun_detect_groups = FALSE,
   verbose = TRUE,
   ...
 )
@@ -34,6 +36,8 @@ filter_groups_data(
 \item{min_simil}{Numeric. Minimum cosine similarity between posts (triggers re-detection).}
 
 \item{min_comm_size}{Integer. Minimum size of communities to keep.}
+
+\item{min_comp_size}{Integer. Minimum size of network components (number of connected nodes) to keep.}
 
 \item{min_degree}{Integer. Minimum node degree to retain.}
 
@@ -55,6 +59,8 @@ Pairs where the geometric mean of `similarity * string_similarity` are below the
 \item{stringsimil_ngram}{Integer. Size of n-grams used for calculating string similarity. Defaults to `3`.}
 
 \item{nthread}{Integer. Number of threads used by `stringdist::stringsim()`. Defaults to `10`.}
+
+\item{rerun_detect_groups}{Logical. Re-run `coorsim_detect_groups()` after filtering? Defaults to `FALSE`.}
 
 \item{verbose}{Logical. Whether to print progress updates using `cli::cli_inform()`.}
 
