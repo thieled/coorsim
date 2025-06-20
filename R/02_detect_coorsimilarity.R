@@ -178,6 +178,15 @@ detect_cosimilarity <- function(
     
     if(parallel){ 
       
+      
+      if (!requireNamespace("parallel", quietly = TRUE)) {
+        stop("Package 'parallel' is required for this function. Please install it.")
+      }
+      
+      if (!requireNamespace("future", quietly = TRUE)) {
+        stop("Package 'future' is required for this function. Please install it.")
+      }
+      
       if(is.null(n_threads)) n_threads = parallel::detectCores() - 1
       
       cli::cli_progress_step("[3/4]: Calculating similarities using sparse document-feature-matrixes and {n_threads} cores in parallel.",
@@ -591,8 +600,9 @@ coorsim_match_overlaps <- function(data){
     
     overlaps <- unique(overlaps, by = c("post_id", "post_id_y"))
     
-  #   
-  #   
+    # Remove mirrored duplicates
+    overlaps <- overlaps[!duplicated(overlaps[, .(pmin(post_id, post_id_y), pmax(post_id, post_id_y))])]
+    
   # # Function to remove duplicated pairs -- (benchmarked) 
   # remove_dup_pairs <- function(dt) {
   #   dt[, c("post_id", "post_id_y") := .(pmin(post_id, post_id_y), # sorts both IDs 
@@ -601,7 +611,6 @@ coorsim_match_overlaps <- function(data){
   # }
   # 
   # overlaps <- remove_dup_pairs(overlaps)
-  # 
   
   # Split overlaps in groups by post_id - using data.table functions -- (benchmarked)
   id_list <- overlaps[, .(id_vector = list(unique(c(.BY[[1]], post_id_y)))), by = post_id]

@@ -179,6 +179,11 @@ label_communities <- function(groups_data,
   
   community_content <- data.table::copy(groups_data$community_content)
   
+  
+  if (!requireNamespace("rollama", quietly = TRUE)) {
+    stop("Package 'rollama' is required for this function. Please install it.")
+  }
+  
   ping_res <- try(rollama::ping_ollama(), silent = TRUE)
   if (!ping_res[[1]]) stop("Ollama is not running.")
   

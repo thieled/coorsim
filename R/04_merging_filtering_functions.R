@@ -344,9 +344,11 @@ augment_groups_data <- function(
 #' @param quantile_postwise Numeric. Top quantile of communities by post count.
 #' @param top_n_accountwise Integer. Top N communities by account count.
 #' @param top_n_postwise Integer. Top N communities by post count.
-#' @param stringsimil_factor Numeric or `NULL`. If set, activates an additional filter based on the geometric mean of embedding similarity and string-level similarity. Pairs with a geometric mean below `min_simil * stringsimil_factor` are removed.
-#' @param stringsimil_method Character. String similarity method used by `stringdist::stringsim()`. Common choices are `"cosine"`, `"jaccard"`, or `"lv"`. Defaults to `"cosine"`.
-#' @param stringsimil_qgram Integer. Size of q-grams used for methods like `"cosine"` or `"jaccard"`. Defaults to `3`.
+#' @param stringsimil_cutoff Numeric or `NULL`. If set, activates an additional filter by ngram-string-similarity. 
+#' Pairs where the geometric mean of `similarity * string_similarity` are below the cutoff are removed.
+#' @param stringsimil_method Character. String similarity method used by `stringdist::stringsim()`. Default is `"cosine"`.
+#' @param stringsimil_ngram Integer. Size of n-grams used for calculating string similarity. Defaults to `3`.
+#' @param nthread Integer. Number of threads used by `stringdist::stringsim()`. Defaults to `10`.
 #' @param verbose Logical. Whether to print progress updates using `cli::cli_inform()`.
 #' @param ... Additional arguments passed to `coorsim_detect_groups()`, triggered after further filtering of `sim_dt`. 
 #'
@@ -363,9 +365,10 @@ filter_groups_data <- function(groups_data,
                                quantile_postwise = NULL,
                                top_n_accountwise = NULL,
                                top_n_postwise = NULL,
-                               stringsimil_factor = NULL,
+                               stringsimil_cutoff = NULL,
                                stringsimil_method = "cosine",
-                               stringsimil_qgram = 3,
+                               stringsimil_ngram = 3,
+                               nthread = 10,
                                verbose = TRUE,
                                ...) {
   # Check minimum requirements
@@ -415,13 +418,80 @@ filter_groups_data <- function(groups_data,
     groups_data$edge_list <- edge_list_new
   }
   
+  
   # Filter by stricter similarity or time window
-  if (!is.null(time_window) || !is.null(min_simil)) {
+  if (!is.null(time_window) || !is.null(min_simil) || !is.null(stringsimil_cutoff)) {
     if (!"sim_dt" %in% names(groups_data)) stop("No 'sim_dt' found. Filtering by 'time_window' or 'min_simil' not possible.")
     
     sim_dt <- data.table::copy(groups_data$sim_dt)
     og_time_window <- sim_dt$param_time_window[[1]]
     og_min_simil <- sim_dt$param_min_simil[[1]]
+    
+    trigger <- FALSE
+    
+    
+    # Get additional filtering by stringdist::stringsimil()
+    if(!is.null(stringsimil_cutoff)){
+      
+      if (!requireNamespace("stringdist", quietly = TRUE)) {
+        stop("Package 'stringdist' is required for this function. Please install it.")
+      }
+      
+      og_nrow <- nrow(sim_dt)
+      
+      # Deduplicate
+      sim_dt <- sim_dt |>
+        unique(by = c("post_id", "post_id_y"))
+      
+      # Prepare clean doc table from both sides
+      if(verbose) cli::cli_progress_step(msg = "Additional string similarity filter: Cleaning ... \n",
+                                         msg_done = "Additional string similarity filter: Cleaning finished. \n")
+      
+      
+      content_dt <- sim_dt[, .(post_id, content)][
+        !duplicated(post_id)
+      ][
+        , .(post_id, content_clean = replace_emoji_with_name(content) |> tolower())
+      ]
+      
+      content_dt_y <- sim_dt[, .(post_id_y, content_y)][
+        !duplicated(post_id_y)
+      ][
+        , .(post_id_y, content_clean_y = replace_emoji_with_name(content_y) |> tolower())
+      ]
+      
+      
+      # Merge cleaned text to sim_dt
+      sim_dt <- merge(sim_dt, content_dt[,.(post_id, content_clean)], by = "post_id", all.x = T)
+      sim_dt <- merge(sim_dt, content_dt_y[,.(post_id_y, content_clean_y)], by = "post_id_y", all.x = T)
+      
+      if(verbose) cli::cli_progress_done()
+      
+      # String simil
+      if(verbose) cli::cli_progress_step(msg = "Additional string similarity filter: 
+            {stringsimil_method} similarity, {stringsimil_ngram}-grams, cutoff: geom. mean (simil*string_simil) >= {stringsimil_cutoff}.",
+                                         msg_done = "Filtered by string similarity:
+             {stringsimil_method} similarity, {stringsimil_ngram}-grams, cutoff: geom. mean (simil*string_simil) >= {stringsimil_cutoff}.")
+      
+      
+      sim_dt <- sim_dt[, string_similarity := stringdist::stringsim(content_clean, 
+                                                                    content_clean_y, 
+                                                                    method = stringsimil_method, 
+                                                                    q = stringsimil_ngram,
+                                                                    nthread = nthread)]
+      
+      sim_dt <- sim_dt[, geom_mean_simil := sqrt(similarity * string_similarity)
+                      ][geom_mean_simil >= stringsimil_cutoff][, c("content_clean", "content_clean_y") := NULL]
+       
+      new_nrow <- nrow(sim_dt)
+      
+      if(verbose) cli::cli_progress_done()
+      if(verbose) cli::cli_inform("Dropped {og_nrow - new_nrow} pairs.")
+      
+      trigger <- TRUE
+      
+    }
+    
     
     if ((!is.null(time_window) && time_window < og_time_window) ||
         (!is.null(min_simil) && min_simil > og_min_simil)) {
@@ -429,33 +499,13 @@ filter_groups_data <- function(groups_data,
       if (!is.null(time_window)) sim_dt <- sim_dt[time_diff <= time_window]
       if (!is.null(min_simil)) sim_dt <- sim_dt[similarity >= min_simil]
       
-      # Get additional filtering by stringdist::stringsimil()
-      if(!is.null(stringsimil_factor)){
-        
-        if(verbose) cli::cli_progress_step(msg = "Applying additional string similarity filter: {stringsimil_method} similarity
-                                  of {stringsimil_qgram}-grams. String-simil factor at: {stringsimil_factor}.",
-                                           msg_done = "Applied additional string similarity filter: {stringsimil_method} similarity
-                                  of {stringsimil_qgram}-grams. String-simil factor at: {stringsimil_factor}.")
-        
-        og_nrow <- nrow(sim_dt)
-        
-        sim_dt <- sim_dt[, string_similarity := stringdist::stringsim(textclean::replace_emoji(content), 
-                                                                      textclean::replace_emoji(content_y), 
-                                                                      method = stringsimil_method, 
-                                                                      q = stringsimil_qgram,
-                                                                      nthread = parallel::detectCores() - 2)][
-                                                                        , geom_mean_simil := sqrt(similarity * string_similarity)
-                                                                      ][, cutoff := param_min_simil * stringsimil_factor][
-                                                                        geom_mean_simil >= cutoff
-                                                                      ]
-        
-        new_nrow <- nrow(sim_dt)
-        
-        
-        if(verbose) cli::cli_progress_done()
-        if(verbose) cli::cli_inform("Dropped {og_nrow - new_nrow} pairs.")
-        
-      }
+      trigger <- TRUE
+      
+    }else if (verbose) {
+      cli::cli_inform("Specified min_simil or time_window are not stricter than in the provided sim_dt.")
+    }
+    
+    if(trigger){
       
       node_list <- data.table::copy(groups_data$node_list)
       user_data <- node_list[, .SD, .SDcols = grep("^account_", names(node_list), value = TRUE)]
@@ -471,7 +521,7 @@ filter_groups_data <- function(groups_data,
         if (!is.null(time_window)) list(time_window = time_window),
         if (!is.null(min_simil)) list(min_simil = min_simil)
       )
-       
+      
       # otherwise take parameters from groups_data
       if (exists("args") && is.list(args) && length(args) > 0) {
         params <- utils::modifyList(groups_data$params, args)
@@ -521,9 +571,7 @@ filter_groups_data <- function(groups_data,
       groups_data <- groups_data_new
       rm(groups_data_new)
       
-    } else if (verbose) {
-      cli::cli_inform("Specified min_simil or time_window are not stricter than in the provided sim_dt.")
-    }
+    } 
   }
   
   # Filter by community index
@@ -626,9 +674,9 @@ filter_groups_data <- function(groups_data,
     quantile_postwise = quantile_postwise,
     top_n_accountwise = top_n_accountwise,
     top_n_postwise = top_n_postwise,
-    stringsimil_factor = stringsimil_factor,
-    stringsimil_method = ifelse(!is.null(stringsimil_factor), stringsimil_method, NULL),
-    stringsimil_qgram = ifelse(!is.null(stringsimil_factor), stringsimil_qgram, NULL)
+    stringsimil_cutoff = stringsimil_cutoff,
+    stringsimil_method = if (!is.null(stringsimil_cutoff)) stringsimil_method else NULL,
+    stringsimil_ngram = if (!is.null(stringsimil_cutoff)) stringsimil_ngram else NULL
   )
   
   return(groups_data)

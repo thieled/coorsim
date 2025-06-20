@@ -246,3 +246,55 @@ z_standardize <- function(x) {
   sigma <- stats::sd(x, na.rm = TRUE)
   return((x - mu) / sigma)
 }
+
+
+
+
+
+#' Replace Emojis with Descriptive Names
+#'
+#' Replaces emoji characters in a character vector with their corresponding
+#' descriptive names in `:colon_syntax:` (e.g., "🔥" becomes ":fire:").
+#' Only emojis present in the input are processed to maximize performance.
+#'
+#' @param text_vec A character vector containing text with emojis to be replaced.
+#'
+#' @return A character vector of the same length as `text_vec`, where all detected
+#' emojis are replaced with their descriptive names in `:colon:` format.
+#'
+#' @details
+#' This function uses the `emoji::emoji_name` dataset for emoji-to-name mapping
+#' and `stringi` for high-performance detection and substitution.
+#' Only emojis that are actually present in the input are processed, making
+#' the function suitable for large text corpora.
+#' 
+#' @export
+replace_emoji_with_name <- function(text_vec) {
+  
+  if (!requireNamespace("emoji", quietly = TRUE)) {
+    stop("Package 'emoji' is required for this function. Please install it.")
+  }
+  if (!requireNamespace("stringi", quietly = TRUE)) {
+    stop("Package 'stringi' is required for this function. Please install it.")
+  }
+  
+  emoji_vec <- emoji::emoji_name
+  
+  # emoji → :name: mapping
+  replacement_map <- setNames(paste0(":", names(emoji_vec), ":"), unname(emoji_vec))
+  emoji_chars <- names(replacement_map)
+  
+  # Only keep emojis that appear in the input
+  present <- vapply(emoji_chars, function(e) any(stringi::stri_detect_fixed(text_vec, e)), logical(1))
+  
+  for (emoji in emoji_chars[present]) {
+    text_vec <- stringi::stri_replace_all_fixed(
+      str = text_vec,
+      pattern = emoji,
+      replacement = replacement_map[[emoji]],
+      vectorize_all = FALSE
+    )
+  }
+  
+  text_vec
+}

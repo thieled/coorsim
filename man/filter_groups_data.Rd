@@ -16,9 +16,10 @@ filter_groups_data(
   quantile_postwise = NULL,
   top_n_accountwise = NULL,
   top_n_postwise = NULL,
-  stringsimil_factor = NULL,
+  stringsimil_cutoff = NULL,
   stringsimil_method = "cosine",
-  stringsimil_qgram = 3,
+  stringsimil_ngram = 3,
+  nthread = 10,
   verbose = TRUE,
   ...
 )
@@ -46,11 +47,14 @@ filter_groups_data(
 
 \item{top_n_postwise}{Integer. Top N communities by post count.}
 
-\item{stringsimil_factor}{Numeric or `NULL`. If set, activates an additional filter based on the geometric mean of embedding similarity and string-level similarity. Pairs with a geometric mean below `min_simil * stringsimil_factor` are removed.}
+\item{stringsimil_cutoff}{Numeric or `NULL`. If set, activates an additional filter by ngram-string-similarity. 
+Pairs where the geometric mean of `similarity * string_similarity` are below the cutoff are removed.}
 
-\item{stringsimil_method}{Character. String similarity method used by `stringdist::stringsim()`. Common choices are `"cosine"`, `"jaccard"`, or `"lv"`. Defaults to `"cosine"`.}
+\item{stringsimil_method}{Character. String similarity method used by `stringdist::stringsim()`. Default is `"cosine"`.}
 
-\item{stringsimil_qgram}{Integer. Size of q-grams used for methods like `"cosine"` or `"jaccard"`. Defaults to `3`.}
+\item{stringsimil_ngram}{Integer. Size of n-grams used for calculating string similarity. Defaults to `3`.}
+
+\item{nthread}{Integer. Number of threads used by `stringdist::stringsim()`. Defaults to `10`.}
 
 \item{verbose}{Logical. Whether to print progress updates using `cli::cli_inform()`.}
 

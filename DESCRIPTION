@@ -27,24 +27,18 @@ Imports:
     Matrix,
     Rcpp (>= 1.0.12),
     reticulate,
-    rollama,
     stats,
     stringr,
     tidygraph,
     viridis,
-    httr,
     hdf5r,
     furrr,
-    parallel,
-    future,
     proxyC,
     text2map,
     pbapply,
     jsonlite,
     purrr,
-    tibble,
-    stringdist,
-    textclean
+    tibble
 Remotes: 
     JBGruber/rollama
 LinkingTo: Rcpp, RcppArmadillo
@@ -53,5 +47,12 @@ Depends:
     R (>= 4.3.0)
 NeedsCompilation: yes
 Suggests: 
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    emoji,
+    stringi,
+    rollama,
+    parallel,
+    future,
+    httr,
+    stringdist
 Config/testthat/edition: 3

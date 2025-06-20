@@ -75,7 +75,8 @@ utils::globalVariables(c(".",
                          "cutoff",
                          "geom_mean_simil",
                          "param_min_simil",
-                         "string_similarity"
+                         "string_similarity",
+                         "content_clean_y"
                          ))
 
 
