@@ -93,13 +93,23 @@ coorsim_detect_groups <- function(simdt,
                                       msg_done = "[2/5]: Created edge list.")
   
   # The edge list connects 'account_id' with 'account_id_y' and counts the connections (as weight)
-  edge_list <- simdt[, .(weight = .N), by = .(account_id, account_id_y)]
+  edge_list <- simdt[
+    , .(account_id = pmin(account_id, account_id_y),
+        account_id_y = pmax(account_id, account_id_y))  # Normalize direction
+  ][
+    , .(weight = .N), by = .(account_id, account_id_y)  # Aggregate
+  ]
   
   # Optionally: Filter the edge list based on the edge_weight parameter
   if (!is.null(edge_weight)) {
     if (verbose) cli::cli_inform("Filter by edge_weight >= {edge_weight}.")
     edge_list <- edge_list[weight >= edge_weight]
+    
+    # Filter simdt to only include post pairs that contributed to retained edges
+    simdt <- simdt[, edge_key := paste0(pmin(account_id, account_id_y), "_", pmax(account_id, account_id_y))][
+      , weight := .N, by = edge_key][weight >= edge_weight][, c("edge_key", "weight") := NULL]
   } 
+  
   
   # Calculate overall mean weight for all edges
   g_mean <- mean(edge_list$weight)

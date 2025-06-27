@@ -335,12 +335,15 @@ augment_groups_data <- function(
 #' that records all active filter parameters.
 #'
 #' @param groups_data A named list from `coorsim::coorsim_detect_groups()` with `graph`, `communities`, `edge_list`, `node_list`, etc.
+#' @param by_col Character. Name of column in `post_data` to filter by.
+#' @param by_val Value of `by_col` to filter by.
 #' @param edge_weight Numeric. Minimum edge weight to retain.
 #' @param time_window Integer. Max seconds between coordinated posts (triggers re-detection).
 #' @param min_simil Numeric. Minimum cosine similarity between posts (triggers re-detection).
 #' @param min_comm_size Integer. Minimum size of communities to keep.
 #' @param min_comp_size Integer. Minimum size of network components (number of connected nodes) to keep.
-#' @param min_degree Integer. Minimum node degree to retain.
+#' @param min_degree Integer. Filter by minimum node degree.
+#' @param min_participation Integer. Filter by number of occurrences in similarity table.
 #' @param communities_index Integer vector. Community indices to keep.
 #' @param quantile_accountwise Numeric. Top quantile of communities by account count.
 #' @param quantile_postwise Numeric. Top quantile of communities by post count.
@@ -358,12 +361,15 @@ augment_groups_data <- function(
 #' @return A filtered `groups_data` list with a new `filter` element listing all applied parameters.
 #' @export
 filter_groups_data <- function(groups_data,
+                               by_col = NULL,
+                               by_val = NULL,
                                edge_weight = NULL,
                                time_window = NULL,
                                min_simil = NULL,
                                min_comm_size = NULL,
                                min_comp_size = NULL,
                                min_degree = NULL,
+                               min_participation = NULL,
                                communities_index = NULL,
                                quantile_accountwise = NULL,
                                quantile_postwise = NULL,
@@ -400,6 +406,83 @@ filter_groups_data <- function(groups_data,
       params = groups_data$params
     )
   }
+  
+  # Filter by post_data column
+  if (!is.null(by_col)) {
+    if (!"sim_dt" %in% names(groups_data)) stop("No 'sim_dt' found. Filtering 'by' not possible.")
+    if (!"post_data" %in% names(groups_data)) stop("No 'sim_dt' found. Filtering 'by' not possible.")
+    
+    if (is.null("by_val")) stop("No 'by_val' specified. Please specify a value.")
+    
+    post_data <- data.table::copy(groups_data$post_data)
+    sim_dt <- data.table::copy(groups_data$sim_dt)
+    
+    
+    node_list <- data.table::copy(groups_data$node_list)
+    user_data <- node_list[, .SD, .SDcols = grep("^account_", names(node_list), value = TRUE)]
+    other_user_vars <- setdiff(names(user_data), c("account_id", "account_name"))
+    return_post_dt <- "post_data" %in% names(groups_data)
+    
+    if (verbose) cli::cli_inform("Filtering by {by_col} = {by_val}.")
+    
+    # Filtering: Step 1: post_data
+    if (!by_col %in% names(post_data)) {
+      stop("Column '", by_col, "' not found in 'post_data'")
+    }
+    post_data <- post_data[get(by_col) == by_val]
+    
+    # Step 2: sim_dt
+    sim_dt <- sim_dt[
+      post_id %in% post_data$post_id & post_id_y %in% post_data$post_id
+    ]
+    
+    # The edge list connects 'account_id' with 'account_id_y' and counts the connections (as weight)
+    edge_list <- simdt[
+      , .(account_id = pmin(account_id, account_id_y),
+          account_id_y = pmax(account_id, account_id_y))  # Normalize direction
+    ][
+      , .(weight = .N), by = .(account_id, account_id_y)  # Aggregate
+    ]
+    
+    # Optionally: Filter the edge list based on the edge_weight parameter
+    if (!is.null(edge_weight)) {
+      if (verbose) cli::cli_inform("Filter by edge_weight >= {edge_weight}.")
+      edge_list <- edge_list[weight >= edge_weight]
+      
+      # Filter simdt to only include post pairs that contributed to retained edges
+      simdt <- simdt[, edge_key := paste0(pmin(account_id, account_id_y), "_", pmax(account_id, account_id_y))][
+        , weight := .N, by = edge_key][weight >= edge_weight][, c("edge_key", "weight") := NULL]
+    } 
+    
+    
+    # Step 4: node_list
+    nodes <- unique(c(sim_dt$account_id, sim_dt$account_id_y))
+    node_list <- node_list[account_id %in% nodes]
+    
+    # Step 5: Create the igraph object
+    g <- igraph::graph_from_data_frame(d = edge_list, 
+                                       vertices = node_list, 
+                                       directed = FALSE)
+    
+    # Step 6: Communities object
+    communities <- groups_data$communities
+    filtered_membership <- igraph::membership(communities)[names(igraph::membership(communities)) %in% nodes]
+    # Recreate the community structure
+    communities <- igraph::make_clusters(g, filtered_membership)
+    
+    # Extract params
+    params <- groups_data$params
+    
+    groups_data <- list(graph = g, 
+                        communities = communities,
+                        edge_list = edge_list,
+                        sim_dt = sim_dt,
+                        node_list = node_list,
+                        post_data = post_data,
+                        params = params)    
+    
+    
+  } 
   
   # Filter by edge weight
   if (!is.null(edge_weight)) {
@@ -614,11 +697,26 @@ filter_groups_data <- function(groups_data,
   
   # Filter by min_degree
   if (!is.null(min_degree)) {
-    edge_list <- data.table::copy(groups_data$edge_list)
-    keep_accounts <- unique(edge_list[, .(account_id = c(account_id, account_id_y))][
-      , .N, by = account_id][N >= min_degree, account_id])
+    g <- groups_data$graph
+    deg <- igraph::degree(g, mode = "all")  # all = undirected
+    keep_accounts <- names(deg[deg >= min_degree])
     n_drop <- nrow(groups_data$node_list) - length(keep_accounts)
     if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes by min_degree >= {min_degree}.")
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
+  }
+  
+  
+  # Filter by min_participation
+  if (!is.null(min_participation)) {
+    if (!"sim_dt" %in% names(groups_data)) stop("No 'sim_dt' found. Cannot apply 'min_participation' filter.")
+    sim_dt <- data.table::copy(groups_data$sim_dt)
+    account_counts <- data.table::rbindlist(list(
+      sim_dt[, .(account_id)],
+      sim_dt[, .(account_id = account_id_y)]
+    ))[, .N, by = account_id]
+    keep_accounts <- account_counts[N >= min_participation, account_id]
+    n_drop <- nrow(groups_data$node_list) - length(keep_accounts)
+    if (verbose) cli::cli_inform("Dropping n = {n_drop} nodes by min_participation >= {min_participation}.")
     groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
   
@@ -755,12 +853,15 @@ filter_groups_data <- function(groups_data,
   
   # Store active filter parameters
   groups_data$filter <- list(
+    by_col = by_col,
+    by_val = by_val,
     edge_weight = edge_weight,
     time_window = time_window,
     min_simil = min_simil,
     min_comm_size = min_comm_size,
     min_comp_size = min_comp_size,
     min_degree = min_degree,
+    min_participation = min_participation,
     communities_index = communities_index,
     quantile_accountwise = quantile_accountwise,
     quantile_postwise = quantile_postwise,

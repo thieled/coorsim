@@ -6,12 +6,15 @@
 \usage{
 filter_groups_data(
   groups_data,
+  by_col = NULL,
+  by_val = NULL,
   edge_weight = NULL,
   time_window = NULL,
   min_simil = NULL,
   min_comm_size = NULL,
   min_comp_size = NULL,
   min_degree = NULL,
+  min_participation = NULL,
   communities_index = NULL,
   quantile_accountwise = NULL,
   quantile_postwise = NULL,
@@ -29,6 +32,10 @@ filter_groups_data(
 \arguments{
 \item{groups_data}{A named list from `coorsim::coorsim_detect_groups()` with `graph`, `communities`, `edge_list`, `node_list`, etc.}
 
+\item{by_col}{Character. Name of column in `post_data` to filter by.}
+
+\item{by_val}{Value of `by_col` to filter by.}
+
 \item{edge_weight}{Numeric. Minimum edge weight to retain.}
 
 \item{time_window}{Integer. Max seconds between coordinated posts (triggers re-detection).}
@@ -39,7 +46,9 @@ filter_groups_data(
 
 \item{min_comp_size}{Integer. Minimum size of network components (number of connected nodes) to keep.}
 
-\item{min_degree}{Integer. Minimum node degree to retain.}
+\item{min_degree}{Integer. Filter by minimum node degree.}
+
+\item{min_participation}{Integer. Filter by number of occurrences in similarity table.}
 
 \item{communities_index}{Integer vector. Community indices to keep.}
 

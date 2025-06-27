@@ -1,4 +1,174 @@
 
+#' Sample and format posts per user for classification or labeling
+#'
+#' This function samples, cleans, and formats posts from social media users into compact
+#' markdown-style text blocks. It includes optional user and post metadata, and estimates
+#' token counts for use in LLM classification or labeling tasks.
+#'
+#' @param groups_data A list containing `post_data` and `node_list`, both as data.tables.
+#' @param user_vars Character vector of user-level variables to include (besides account_name).
+#' @param user_vars_short Optional character vector of short labels for `user_vars`, in the same order.
+#' @param post_vars Character vector of post-level variables to include (besides content).
+#' @param post_vars_short Optional character vector of short labels for `post_vars`, in the same order.
+#' @param sampling_ratio Proportion of a user's posts to sample (ignored if below `min_n`).
+#' @param min_n Minimum number of posts required per user (to include in the result).
+#' @param max_n Maximum number of posts to sample per user.
+#' @param min_chars Minimum number of characters required in cleaned post content.
+#' @param max_text_length Maximum character length for any cleaned text field.
+#' @param clean_name Logical. If TRUE, cleans the `account_name` field (recommended).
+#' @param seed Integer seed for reproducible sampling.
+#'
+#' @return A data.table with one row per user, containing:
+#' \describe{
+#'   \item{account_id}{The user's unique account ID.}
+#'   \item{community}{Community membership label.}
+#'   \item{account_name_clean}{Cleaned version of the user's display name.}
+#'   \item{text}{Markdown-formatted string with user and post metadata.}
+#'   \item{sampled_post_ids}{List column of sampled post IDs per user.}
+#'   \item{approx_tokens}{Approximate number of tokens in `text`.}
+#' }
+#'
+#' @export
+sample_user_text <- function(groups_data,
+                             user_vars = NULL,
+                             user_vars_short = NULL,
+                             post_vars = NULL,
+                             post_vars_short = NULL,
+                             sampling_ratio = 0.2,
+                             min_n = 5,
+                             max_n = 30,
+                             min_chars = 20,
+                             max_text_length = 500,
+                             clean_name = TRUE,
+                             seed = 42) {
+  
+  if (!"node_list" %in% names(groups_data) || !"post_data" %in% names(groups_data)) {
+    stop("'groups_data' must contain 'node_list' and 'post_data'.")
+  }
+  
+  post_data <- data.table::copy(groups_data$post_data)
+  stopifnot("data.table" %in% class(post_data))
+  set.seed(seed)
+  
+  required <- c("post_id", "account_id", "account_name", "content", "community")
+  all_vars <- unique(c(required, user_vars, post_vars))
+  if (!all(all_vars %in% names(post_data))) {
+    stop("Missing required variables in post_data: ", paste(setdiff(all_vars, names(post_data)), collapse = ", "))
+  }
+  
+  clean_text <- function(text, max_length) {
+    text |>
+      stringr::str_replace_all("([[:punct:]])\\1{1,}", "\\1") |>
+      stringr::str_remove_all("\\b[a-fA-F0-9]{32,}\\b") |>
+      #    stringr::str_remove_all("\\b\\d+\\b") |>
+      stringr::str_replace_all("(?<!#)\\d", "") |>
+      stringr::str_replace_all("[\\r\\n\\t]+", " ") |>
+      stringr::str_squish() |>
+      stringr::str_trunc(width = max_length, ellipsis = "..")
+  }
+  
+  # Clean post content
+  post_data[, content_clean := clean_text(content, max_text_length)]
+  
+  # Clean optional user vars
+  if (!is.null(user_vars)) {
+    for (var in user_vars) {
+      clean_col <- paste0(var, "_clean")
+      data.table::set(post_data, j = clean_col, value = clean_text(post_data[[var]], max_text_length))
+    }
+  }
+  
+  # Clean optional post vars
+  if (!is.null(post_vars)) {
+    for (var in post_vars) {
+      clean_col <- paste0(var, "_clean")
+      data.table::set(post_data, j = clean_col, value = clean_text(post_data[[var]], max_text_length))
+    }
+  }
+  
+  # Clean account_name
+  post_data[, account_name_clean := if (clean_name) clean_text(account_name, max_text_length) else account_name]
+  
+  # Filter short content and deduplicate per user
+  post_data <- post_data[nchar(content_clean) >= min_chars]
+  post_data <- unique(post_data, by = c("account_id", "content_clean"))
+  
+  # Sample posts per user
+  sampled_dt <- post_data[
+    , {
+      n_total <- .N
+      n_sample <- min(max(min_n, ceiling(n_total * sampling_ratio)), max_n)
+      .SD[sample(.N, min(.N, n_sample))]
+    },
+    by = account_id
+  ]
+  
+  # Drop users with too few sampled posts
+  keep_users <- sampled_dt[, .N, by = account_id][N >= min_n]
+  n_comm_posts <- sampled_dt[, .N, by = community][, N_comm := N][, N := NULL]
+  if (nrow(keep_users) == 0) cli::cli_abort("No users found with >= {min_n} posts.")
+  sampled_dt <- sampled_dt[account_id %in% keep_users$account_id]
+  
+  
+  # Format per user
+  out <- sampled_dt[
+    , {
+      # Build user meta string
+      user_meta <- unique(.SD[, c("account_name_clean", "community", paste0(user_vars, "_clean")), with = FALSE])[1L]
+      user_info <- if (!is.null(user_vars) && length(user_vars) > 0) {
+        short_names <- if (!is.null(user_vars_short)) user_vars_short else user_vars
+        user_values <- unlist(user_meta[, paste0(user_vars, "_clean"), with = FALSE])
+        non_empty <- !is.na(user_values) & nzchar(user_values)
+        if (any(non_empty)) {
+          meta_pairs <- paste0(short_names[non_empty], ": ", user_values[non_empty])
+          paste0("[", paste(meta_pairs, collapse = ", "), "]")
+        } else ""
+      } else ""
+      
+      # Build post lines
+      post_lines <- apply(
+        .SD[, c("content_clean", paste0(post_vars, "_clean")), with = FALSE],
+        1,
+        function(row) {
+          post_meta <- if (!is.null(post_vars) && length(post_vars) > 0) {
+            short <- if (!is.null(post_vars_short)) post_vars_short else post_vars
+            vals <- row[-1]
+            non_empty <- !is.na(vals) & nzchar(vals)
+            if (any(non_empty)) {
+              meta_pairs <- paste0(short[non_empty], ": ", vals[non_empty])
+              paste0(" [", paste(meta_pairs, collapse = ", "), "]")
+            } else ""
+          } else ""
+          paste0(row[[1]], post_meta)
+        }
+      )
+      
+      # Combine markdown
+      md <- paste0(user_meta$account_name_clean,
+                   if (nchar(user_info) > 0) paste0(" ", user_info),
+                   ": ", paste(post_lines, collapse = " | "))
+      
+      list(
+        community = user_meta$community,
+        account_name_clean = user_meta$account_name_clean,
+        text = md,
+        sampled_post_ids = list(.SD$post_id),
+        approx_tokens = as.integer(round(length(strsplit(md, "\\s+")[[1]]) * 1.3))
+      )
+    },
+    by = account_id
+  ]
+  
+  # Join n info
+  out <- merge(out, keep_users, by = "account_id", all.x = T)
+  out <- merge(out, n_comm_posts, by = "community", all.x = T)
+  out[, user_share_comm := N/N_comm][, N := NULL][, N_comm := NULL]
+  
+  return(out)
+}
+
+
+
 #' Sample cleaned and formatted post data per community for classification
 #'
 #' This function samples and cleans posts from social media community members,

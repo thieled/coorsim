@@ -76,7 +76,11 @@ utils::globalVariables(c(".",
                          "geom_mean_simil",
                          "param_min_simil",
                          "string_similarity",
-                         "content_clean_y"
+                         "content_clean_y",
+                         "account_name_clean",
+                         "N_comm",
+                         "edge_key",
+                         "user_share_comm"
                          ))
 
 
