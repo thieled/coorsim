@@ -2,7 +2,7 @@
 % Please edit documentation in R/05_generate_community_labels.R
 \name{sample_user_text}
 \alias{sample_user_text}
-\title{Sample and format posts per user for classification or labeling}
+\title{Sample and format user posts for classification or labeling tasks}
 \usage{
 sample_user_text(
   groups_data,
@@ -10,53 +10,68 @@ sample_user_text(
   user_vars_short = NULL,
   post_vars = NULL,
   post_vars_short = NULL,
-  sampling_ratio = 0.2,
-  min_n = 5,
-  max_n = 30,
-  min_chars = 20,
-  max_text_length = 500,
+  min_chars = 1,
+  max_chars = 1000,
   clean_name = TRUE,
+  min_n_posts = 1,
+  max_n_posts = 30,
+  sampling_ratio_posts = 0.5,
+  min_n_users = 1,
+  max_n_users = 30,
+  sampling_ratio_users = 0.5,
+  strat_sample = TRUE,
   seed = 42
 )
 }
 \arguments{
-\item{groups_data}{A list containing `post_data` and `node_list`, both as data.tables.}
+\item{groups_data}{A named list containing `post_data` and `node_list`, both of which must be `data.table` objects.}
 
-\item{user_vars}{Character vector of user-level variables to include (besides account_name).}
+\item{user_vars}{Character vector of user-level variables to include (in addition to `account_name`).}
 
-\item{user_vars_short}{Optional character vector of short labels for `user_vars`, in the same order.}
+\item{user_vars_short}{Optional character vector with short labels corresponding to `user_vars` for display.}
 
-\item{post_vars}{Character vector of post-level variables to include (besides content).}
+\item{post_vars}{Character vector of post-level variables to include (in addition to `content`).}
 
-\item{post_vars_short}{Optional character vector of short labels for `post_vars`, in the same order.}
+\item{post_vars_short}{Optional character vector with short labels corresponding to `post_vars` for display.}
 
-\item{sampling_ratio}{Proportion of a user's posts to sample (ignored if below `min_n`).}
+\item{min_chars}{Minimum number of characters required for post content (after cleaning). Default is 20.}
 
-\item{min_n}{Minimum number of posts required per user (to include in the result).}
+\item{max_chars}{Maximum number of characters for cleaned content or metadata fields. Default is 250.}
 
-\item{max_n}{Maximum number of posts to sample per user.}
+\item{clean_name}{Logical. If `TRUE`, clean `account_name` to remove noise and truncate length. Default is `TRUE`.}
 
-\item{min_chars}{Minimum number of characters required in cleaned post content.}
+\item{min_n_posts}{Minimum number of posts per user to be included. Default is 2.}
 
-\item{max_text_length}{Maximum character length for any cleaned text field.}
+\item{max_n_posts}{Maximum number of posts per user to be included. Default is 10.}
 
-\item{clean_name}{Logical. If TRUE, cleans the `account_name` field (recommended).}
+\item{sampling_ratio_posts}{Proportion of posts to sample per user. Default is 0.25.}
 
-\item{seed}{Integer seed for reproducible sampling.}
+\item{min_n_users}{Minimum number of users to sample per community. Default is 2.}
+
+\item{max_n_users}{Maximum number of users to sample per community. Default is 10.}
+
+\item{sampling_ratio_users}{Proportion of users to sample per community. Default is 0.25.}
+
+\item{strat_sample}{Logical. If `TRUE`, performs stratified sampling of users by post volume within community. 
+If `FALSE`, selects most active users. Default is `TRUE`.}
+
+\item{seed}{Integer seed for reproducible sampling. Default is 42.}
 }
 \value{
-A data.table with one row per user, containing:
-\describe{
-  \item{account_id}{The user's unique account ID.}
-  \item{community}{Community membership label.}
-  \item{account_name_clean}{Cleaned version of the user's display name.}
-  \item{text}{Markdown-formatted string with user and post metadata.}
-  \item{sampled_post_ids}{List column of sampled post IDs per user.}
-  \item{approx_tokens}{Approximate number of tokens in `text`.}
-}
+A list identical to `groups_data` with an added `user_labels` element. 
+  This element is a `data.table` containing:
+  \itemize{
+    \item \code{community}: Community identifier.
+    \item \code{account_name_clean}: Cleaned display name.
+    \item \code{text}: A markdown-style string combining the user's posts and metadata.
+    \item \code{sampled_post_ids}: List column of sampled post IDs.
+    \item \code{approx_tokens}: Approximate token count (assuming 1.3x whitespace word count).
+    \item \code{user_share_comm}: Relative posting activity of the user in their community.
+  }
 }
 \description{
-This function samples, cleans, and formats posts from social media users into compact
-markdown-style text blocks. It includes optional user and post metadata, and estimates
-token counts for use in LLM classification or labeling tasks.
+This function samples posts from social media users based on customizable constraints 
+and formats them into a markdown-style text block suitable for input to classification 
+or labeling models. It supports inclusion of user-level and post-level metadata, 
+optional name cleaning, and stratified or top-down user sampling per community.
 }

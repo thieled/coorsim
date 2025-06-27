@@ -80,7 +80,17 @@ utils::globalVariables(c(".",
                          "account_name_clean",
                          "N_comm",
                          "edge_key",
-                         "user_share_comm"
+                         "user_share_comm",
+                         "simdt",
+                         "description",
+                         "id",
+                         "l_d",
+                         "l_l",
+                         "n_users",
+                         "slice",
+                         "sum_user_share_comm",
+                         "sum_user_share_comm_total",
+                         "text_slice"
                          ))
 
 

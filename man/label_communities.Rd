@@ -2,30 +2,90 @@
 % Please edit documentation in R/05_generate_community_labels.R
 \name{label_communities}
 \alias{label_communities}
-\title{Label Communities Using LLM}
+\title{Label Communities Using a Local LLM}
 \usage{
 label_communities(
   groups_data,
-  model = "llama3.2:3b-instruct-q8_0",
+  max_n_per_slice = 10,
+  min_chars = 1,
+  max_chars = 1000,
+  min_share = NULL,
+  model = "llama3.2:3b",
   retries = 3,
-  retry_trunc = 4000
+  retry_trunc = 4000,
+  seed = 42,
+  temp = 0,
+  prompt = NULL,
+  system = NULL,
+  system_slices = NULL,
+  example = NULL,
+  example_slices = NULL,
+  answer = NULL,
+  answer_slices = NULL,
+  verbose = TRUE
 )
 }
 \arguments{
-\item{groups_data}{A list containing `community_content` as returned by `sample_community_text()`.}
+\item{groups_data}{A list containing a `user_labels` element, as returned by `sample_user_text()`.}
 
-\item{model}{Character. The name of the local LLM model (must be available in Ollama).}
+\item{max_n_per_slice}{Integer. Maximum number of users to include per slice when breaking up large communities. Default is 10.}
 
-\item{retries}{Integer. Number of retry attempts for communities with invalid JSON.}
+\item{min_chars}{Integer. Minimum character length for valid user-generated descriptions. Default is 1.}
 
-\item{retry_trunc}{Integer. Maximum character length to truncate input text during retries.}
+\item{max_chars}{Integer. Maximum character length for any cleaned user input. Default is 1000.}
+
+\item{min_share}{Optional numeric. Minimum cumulative posting share (`user_share_comm`) per slice. Default is `NULL` (no filter).}
+
+\item{model}{Character. Name of the LLM model available via Ollama (e.g., `"llama3.2:3b"`). Default is `"llama3.2:3b"`.}
+
+\item{retries}{Integer. Number of retry attempts for invalid or unparseable JSON responses. Default is 3.}
+
+\item{retry_trunc}{Integer. Character limit for truncating input when retrying. Default is 4000.}
+
+\item{seed}{Integer. Random seed for reproducibility. Default is 42.}
+
+\item{temp}{Numeric. Sampling temperature for the LLM (0 = deterministic). Default is 0.0.}
+
+\item{prompt}{Character. Prompt string to guide labeling (overrides default in `prompts$prompt_comm`). Optional.}
+
+\item{system}{Character. System prompt string for guiding general LLM behavior (overrides `prompts$system_comm`). Optional.}
+
+\item{system_slices}{Character. Optional override for `prompts$system_comm_agg` when aggregating across slices.}
+
+\item{example}{Character. Input example text for single-slice labeling. Optional.}
+
+\item{example_slices}{Character. Input example for aggregated slice-level labeling. Optional.}
+
+\item{answer}{Character. Expected answer format for single-slice labeling example. Optional.}
+
+\item{answer_slices}{Character. Expected answer format for slice-aggregated labeling. Optional.}
+
+\item{verbose}{Logical. Whether to print progress and retry information. Default is `TRUE`.}
 }
 \value{
-The input `groups_data`, with `community_content` updated to include model-generated
-columns: `label`, `description`, `lang`, `is_valid_json`, `response`, and metadata.
+The input `groups_data` list, updated with a new `community_labels` element. This is a `data.table` that includes:
+\itemize{
+  \item \code{community} – Community ID.
+  \item \code{label} – LLM-generated label for the community.
+  \item \code{description} – LLM-generated textual summary of the community.
+  \item \code{text} – Final text input used for labeling.
+  \item \code{is_valid_json} – Logical indicator for successful parsing of model output.
+  \item \code{model}, \code{model_queried_at}, \code{model_total_duration} – Metadata for reproducibility.
+}
 }
 \description{
-This function takes sampled community content and uses a local LLM model via the `rollama` interface
-to generate JSON-formatted labels, descriptions, and language tags for each community. If any results
-fail JSON validation, the function retries with truncated input up to a specified number of times.
+This function generates descriptive labels for communities of users based on aggregated user-level metadata
+and sample texts. It uses a local large language model (LLM) via the `rollama` interface to extract structured
+labels and descriptions for each community. If the user count is high, the community is sliced into subsets, labeled
+individually, and then re-aggregated. Malformed or incomplete model responses are retried up to a specified number of times.
+}
+\details{
+If a community contains many users, the function first slices the community using `slice_community_text()`,
+applies the LLM on each slice, and aggregates the results in a second LLM round. The function assumes the LLM
+returns JSON with at least `label` and `description` fields. Invalid responses are filtered or retried up to `retries` times.
+
+Requires Ollama to be installed and running, with the selected model available. See `rollama::ping_ollama()` for setup checks.
+}
+\seealso{
+[sample_user_text()], [slice_community_text()], [rollama::make_query()], [clean_json_strings()]
 }

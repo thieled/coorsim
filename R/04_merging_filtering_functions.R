@@ -429,7 +429,8 @@ filter_groups_data <- function(groups_data,
     if (!by_col %in% names(post_data)) {
       stop("Column '", by_col, "' not found in 'post_data'")
     }
-    post_data <- post_data[get(by_col) == by_val]
+    ### post_data <- post_data[get(by_col) == by_val]
+    post_data <- post_data[get(by_col) %in% by_val] ## <<<<<<<<<<<<<<<<<<
     
     # Step 2: sim_dt
     sim_dt <- sim_dt[
@@ -437,7 +438,7 @@ filter_groups_data <- function(groups_data,
     ]
     
     # The edge list connects 'account_id' with 'account_id_y' and counts the connections (as weight)
-    edge_list <- simdt[
+    edge_list <- sim_dt[
       , .(account_id = pmin(account_id, account_id_y),
           account_id_y = pmax(account_id, account_id_y))  # Normalize direction
     ][
@@ -450,7 +451,7 @@ filter_groups_data <- function(groups_data,
       edge_list <- edge_list[weight >= edge_weight]
       
       # Filter simdt to only include post pairs that contributed to retained edges
-      simdt <- simdt[, edge_key := paste0(pmin(account_id, account_id_y), "_", pmax(account_id, account_id_y))][
+      sim_dt <- simdt[, edge_key := paste0(pmin(account_id, account_id_y), "_", pmax(account_id, account_id_y))][
         , weight := .N, by = edge_key][weight >= edge_weight][, c("edge_key", "weight") := NULL]
     } 
     
@@ -849,7 +850,6 @@ filter_groups_data <- function(groups_data,
     rm(groups_data_new)
     
   } 
-  
   
   # Store active filter parameters
   groups_data$filter <- list(
