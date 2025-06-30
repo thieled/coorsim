@@ -1,133 +1,3 @@
-#' #' Augment a Similarity Table with Post and User Data
-#' #'
-#' #' This function merges data from `post_data` and `user_data` into a similarity table (`sim_dt`).
-#' #' It adds columns for post content and user information while handling potential name collisions.
-#' #'
-#' #' @param post_data A `data.table` containing post data.
-#' #' @param user_data A `data.table` containing user data.
-#' #' @param sim_dt A `data.table` containing similarity data between posts.
-#' #' @param post_id Optional. The column name in `post_data` to be renamed to 'post_id' for joining.
-#' #' @param account_id Optional. The column name in `user_data` to be renamed to 'account_id' for joining.
-#' #' @param account_name Optional. The column name in `user_data` to be renamed to 'account_name'.
-#' #' @param content Optional. The column name in `post_data` containing the post content to be renamed to 'content'.
-#' #' @param other_post_vars Optional. Additional columns to retain from `post_data`.
-#' #' @param other_user_vars Optional. Additional columns to retain from `user_data`.
-#' #' @param verbose Logical. If `TRUE`, provides verbose output.
-#' #'
-#' #' @return A `data.table` with `post_data` and `user_data` merged into `sim_dt`.
-#' #' @export
-#' augment_similarity_table <- function(
-#'     post_data,
-#'     user_data,
-#'     sim_dt,
-#'     post_id = NULL,
-#'     account_id = NULL,
-#'     account_name = NULL,
-#'     content = NULL,
-#'     other_post_vars = NULL,
-#'     other_user_vars = NULL,
-#'     verbose = FALSE) {
-#'   # Ensure inputs are data.tables if not already
-#'   if (!data.table::is.data.table(sim_dt)) sim_dt <- data.table::as.data.table(sim_dt)
-#'   if (!data.table::is.data.table(post_data)) post_data <- data.table::as.data.table(post_data)
-#'   if (!data.table::is.data.table(user_data)) user_data <- data.table::as.data.table(user_data)
-#' 
-#'   # Check and rename post_data columns
-#'   if (verbose) cat("Harmonizing 'post_data'...\n")
-#' 
-#'   # Rename columns if alternative names are given and match
-#'   post_col_renames <- list(post_id = post_id, content = content)
-#'   for (col in names(post_col_renames)) {
-#'     alt_name <- post_col_renames[[col]]
-#'     if (!is.null(alt_name) && alt_name %in% names(post_data)) {
-#'       data.table::setnames(post_data, alt_name, col)
-#'     }
-#'   }
-#' 
-#'   # Select relevant columns from post_data
-#'   post_cols_to_keep <- c("post_id", "content", other_post_vars)
-#'   post_data <- post_data[, intersect(post_cols_to_keep, names(post_data)), with = FALSE]
-#' 
-#'   ### De-duplicating post_data ###
-#'   if (any(duplicated(post_data$post_id))) {
-#'     if (verbose) cat("De-duplicating 'post_data'...\n")
-#'     post_data <- post_data[!duplicated(post_data$post_id)]
-#'   }
-#' 
-#' 
-#'   # Check and rename user_data columns
-#'   if (verbose) cat("Harmonizing 'user_data'...\n")
-#' 
-#'   user_col_renames <- list(account_id = account_id, account_name = account_name)
-#'   for (col in names(user_col_renames)) {
-#'     alt_name <- user_col_renames[[col]]
-#'     if (!is.null(alt_name) && alt_name %in% names(user_data)) {
-#'       data.table::setnames(user_data, alt_name, col)
-#'     }
-#'   }
-#' 
-#'   # Add prefix to user_data columns (except account_id)
-#'   user_cols_to_keep <- c("account_id", "account_name", other_user_vars)
-#'   user_data <- user_data[, intersect(user_cols_to_keep, names(user_data)), with = FALSE]
-#'   user_cols <- setdiff(names(user_data), c("account_id", "account_name"))
-#'   data.table::setnames(user_data, user_cols, paste0("account_", user_cols))
-#' 
-#'   ### De-duplicating user_data ###
-#'   if (any(duplicated(user_data$user_id))) {
-#'     if (verbose) cat("De-duplicating 'user_data'...\n")
-#'     user_data <- user_data[!duplicated(user_data$account_id)]
-#'   }
-#'   ### Merging process using data.table's direct join syntax ###
-#' 
-#'   # Join 'post_data' to 'sim_dt' by "post_id" (left join)
-#'   if (verbose) cat("Merging 'post_data' with 'sim_dt' by 'post_id'...\n")
-#'   sim_dt <- post_data[sim_dt, on = "post_id", nomatch = 0]
-#' 
-#'   ### Copy post_data before second join to avoid i. prefix ###
-#'   post_data_y <- data.table::copy(post_data)
-#' 
-#'   ### Add _y suffix to post_data columns before second join
-#'   data.table::setnames(post_data_y, old = names(post_data_y), new = paste0(names(post_data_y), "_y"))
-#' 
-#'   # Join 'post_data_y' to 'sim_dt' by "post_id_y" (left join)
-#'   if (verbose) cat("Merging 'post_data_y' with 'sim_dt' by 'post_id_y'...\n")
-#'   sim_dt <- post_data_y[sim_dt, on = "post_id_y", nomatch = 0]
-#' 
-#'   # Join 'user_data_y' to 'sim_dt' by "account_id_y" (left join)
-#'   if (verbose) cat("Merging 'user_data_y' with 'sim_dt' by 'account_id'...\n")
-#'   sim_dt <- user_data[sim_dt, on = "account_id", nomatch = 0]
-#' 
-#'   ### Copy user_data before second join to avoid i. prefix ###
-#'   user_data_y <- data.table::copy(user_data)
-#' 
-#'   ### Add _y suffix to user_data columns before second join
-#'   data.table::setnames(user_data_y, old = names(user_data_y), new = paste0(names(user_data_y), "_y"))
-#' 
-#'   # Join 'user_data_y' to 'sim_dt' by "account_id_y" (left join)
-#'   if (verbose) cat("Merging 'user_data_y' with 'sim_dt' by 'account_id_y'...\n")
-#'   sim_dt <- user_data_y[sim_dt, on = "account_id_y", nomatch = 0]
-#' 
-#'   # Reorder columns in the desired order
-#'   desired_order <- c(
-#'     "post_id", "post_id_y", "similarity",
-#'     "content", "content_y",
-#'     "time", "time_y",
-#'     "account_id", "account_id_y",
-#'     "account_name", "account_name_y"
-#'   )
-#' 
-#'   # Combine the desired order with the remaining columns
-#'   remaining_columns <- setdiff(names(sim_dt), desired_order)
-#'   new_column_order <- c(desired_order, remaining_columns)
-#' 
-#'   # Reorder the data.table columns
-#'   sim_dt <- sim_dt[, ..new_column_order]
-#' 
-#'   # Return the augmented similarity table
-#'   return(sim_dt)
-#' }
-
-
 
 #' Augment Group Data with Post and User Information
 #'
@@ -325,41 +195,6 @@ augment_groups_data <- function(
 
 
 
-
-
-#' Filter and reduce a `groups_data` object by edge, time, similarity, or node-based constraints
-#'
-#' This function filters a `groups_data` object (typically returned by `coorsim::coorsim_detect_groups()`)
-#' according to user-specified thresholds. If stricter time or similarity constraints are provided,
-#' it will re-run group detection. At the end, it attaches a `filter` list to the returned object
-#' that records all active filter parameters.
-#'
-#' @param groups_data A named list from `coorsim::coorsim_detect_groups()` with `graph`, `communities`, `edge_list`, `node_list`, etc.
-#' @param by_col Character. Name of column in `post_data` to filter by.
-#' @param by_val Value of `by_col` to filter by.
-#' @param edge_weight Numeric. Minimum edge weight to retain.
-#' @param time_window Integer. Max seconds between coordinated posts (triggers re-detection).
-#' @param min_simil Numeric. Minimum cosine similarity between posts (triggers re-detection).
-#' @param min_comm_size Integer. Minimum size of communities to keep.
-#' @param min_comp_size Integer. Minimum size of network components (number of connected nodes) to keep.
-#' @param min_degree Integer. Filter by minimum node degree.
-#' @param min_participation Integer. Filter by number of occurrences in similarity table.
-#' @param communities_index Integer vector. Community indices to keep.
-#' @param quantile_accountwise Numeric. Top quantile of communities by account count.
-#' @param quantile_postwise Numeric. Top quantile of communities by post count.
-#' @param top_n_accountwise Integer. Top N communities by account count.
-#' @param top_n_postwise Integer. Top N communities by post count.
-#' @param stringsimil_cutoff Numeric or `NULL`. If set, activates an additional filter by ngram-string-similarity. 
-#' Pairs where the geometric mean of `similarity * string_similarity` are below the cutoff are removed.
-#' @param stringsimil_method Character. String similarity method used by `stringdist::stringsim()`. Default is `"cosine"`.
-#' @param stringsimil_ngram Integer. Size of n-grams used for calculating string similarity. Defaults to `3`.
-#' @param nthread Integer. Number of threads used by `stringdist::stringsim()`. Defaults to `10`.
-#' @param verbose Logical. Whether to print progress updates using `cli::cli_inform()`.
-#' @param rerun_detect_groups Logical. Re-run `coorsim_detect_groups()` after filtering? Defaults to `FALSE`.
-#' @param ... Additional arguments passed to `coorsim_detect_groups()`, triggered after further filtering of `sim_dt`. 
-#'
-#' @return A filtered `groups_data` list with a new `filter` element listing all applied parameters.
-#' @export
 filter_groups_data <- function(groups_data,
                                by_col = NULL,
                                by_val = NULL,
@@ -393,18 +228,30 @@ filter_groups_data <- function(groups_data,
     communities <- igraph::make_clusters(g, filtered_membership)
     edge_list <- groups_data$edge_list[account_id %in% valid_accounts & account_id_y %in% valid_accounts]
     node_list <- groups_data$node_list[account_id %in% valid_accounts]
-    post_data <- if ("post_data" %in% names(groups_data)) groups_data$post_data[account_id %in% valid_accounts] else NULL
-    sim_dt <- if ("sim_dt" %in% names(groups_data)) groups_data$sim_dt[account_id %in% valid_accounts & account_id_y %in% valid_accounts] else NULL
+    post_data <- if ("post_data" %in% names(groups_data)  && !is.null(groups_data$post_data)) groups_data$post_data[account_id %in% valid_accounts] else NULL
+    sim_dt <- if ("sim_dt" %in% names(groups_data)  && !is.null(groups_data$sim_dt)) groups_data$sim_dt[account_id %in% valid_accounts & account_id_y %in% valid_accounts] else NULL
+    user_labels <- if ("user_labels" %in% names(groups_data)  && !is.null(groups_data$user_labels)) groups_data$user_labels[account_id %in% valid_accounts] else NULL
+    community_labels <- if ("community_labels" %in% names(groups_data)  && !is.null(groups_data$community_labels)) groups_data$community_labels[community %in% unique(node_list$community)] else NULL
+    community_stats <- if ("community_stats" %in% names(groups_data) && !is.null(groups_data$community_stats)) groups_data$community_stats[community %in% unique(node_list$community)] else NULL
+    filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
+    params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
     
-    list(
+    result <- list(
       graph = g,
       communities = communities,
       edge_list = edge_list,
       node_list = node_list,
       post_data = post_data,
       sim_dt = sim_dt,
-      params = groups_data$params
+      params = params,
+      filter = filter,
+      user_labels = user_labels,
+      community_labels = community_labels,
+      community_stats = community_stats
     )
+    
+    result <- Filter(Negate(is.null), result)
+    return(result)
   }
   
   # Filter by post_data column
@@ -429,8 +276,8 @@ filter_groups_data <- function(groups_data,
     if (!by_col %in% names(post_data)) {
       stop("Column '", by_col, "' not found in 'post_data'")
     }
-    ### post_data <- post_data[get(by_col) == by_val]
-    post_data <- post_data[get(by_col) %in% by_val] ## <<<<<<<<<<<<<<<<<<
+    
+    post_data <- post_data[get(by_col) %in% by_val] 
     
     # Step 2: sim_dt
     sim_dt <- sim_dt[
@@ -451,10 +298,9 @@ filter_groups_data <- function(groups_data,
       edge_list <- edge_list[weight >= edge_weight]
       
       # Filter simdt to only include post pairs that contributed to retained edges
-      sim_dt <- simdt[, edge_key := paste0(pmin(account_id, account_id_y), "_", pmax(account_id, account_id_y))][
+      sim_dt <- sim_dt[, edge_key := paste0(pmin(account_id, account_id_y), "_", pmax(account_id, account_id_y))][
         , weight := .N, by = edge_key][weight >= edge_weight][, c("edge_key", "weight") := NULL]
     } 
-    
     
     # Step 4: node_list
     nodes <- unique(c(sim_dt$account_id, sim_dt$account_id_y))
@@ -471,8 +317,12 @@ filter_groups_data <- function(groups_data,
     # Recreate the community structure
     communities <- igraph::make_clusters(g, filtered_membership)
     
-    # Extract params
-    params <- groups_data$params
+    # Subset remaining objects
+    user_labels <- if ("user_labels" %in% names(groups_data)  && !is.null(groups_data$user_labels)) data.table::copy(groups_data$user_labels[account_id %in% nodes]) else NULL
+    community_labels <- if ("community_labels" %in% names(groups_data)  && !is.null(groups_data$community_labels)) groups_data$community_labels[community %in% unique(node_list$community)] else NULL
+    community_stats <- if ("community_stats" %in% names(groups_data) && !is.null(groups_data$community_stats)) groups_data$community_stats[community %in% unique(node_list$community)] else NULL
+    filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
+    params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
     
     groups_data <- list(graph = g, 
                         communities = communities,
@@ -480,10 +330,17 @@ filter_groups_data <- function(groups_data,
                         sim_dt = sim_dt,
                         node_list = node_list,
                         post_data = post_data,
-                        params = params)    
+                        params = params,
+                        filter = filter,
+                        user_labels = user_labels,
+                        community_labels = community_labels,
+                        community_stats = community_stats
+    )    
     
     
+    groups_data <- Filter(Negate(is.null), groups_data)
   } 
+  
   
   # Filter by edge weight
   if (!is.null(edge_weight)) {
@@ -656,9 +513,18 @@ filter_groups_data <- function(groups_data,
                                                       verbose =  verbose, 
                                                       sim_dt_community = sim_dt_community)
       
+      # Subset remaining objects
+      groups_data_new$user_labels <- if ("user_labels" %in% names(groups_data) && !is.null(groups_data$user_labels)) groups_data$user_labels[account_id %in% groups_data_new$node_list$account_id] else NULL
+      groups_data_new$community_labels <- if ("community_labels" %in% names(groups_data) && !is.null(groups_data$community_labels)) groups_data$community_labels[community %in% unique(groups_data_new$node_list$community)] else NULL
+      community_stats <- if ("community_stats" %in% names(groups_data) && !is.null(groups_data$community_stats)) groups_data$community_stats[community %in% unique(node_list$community)] else NULL
+      filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
+      params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
+      
+      
       ## Overwrite groups_data object
       groups_data <- groups_data_new
       rm(groups_data_new)
+      groups_data <- Filter(Negate(is.null), groups_data)
       
     } 
   }
@@ -845,14 +711,31 @@ filter_groups_data <- function(groups_data,
                                                     verbose =  verbose, 
                                                     sim_dt_community = sim_dt_community)
     
+    # Subset remaining objects
+    groups_data_new$user_labels <- if ("user_labels" %in% names(groups_data) && !is.null(groups_data$user_labels)) groups_data$user_labels[account_id %in% groups_data_new$node_list$account_id] else NULL
+    groups_data_new$community_labels <- if ("community_labels" %in% names(groups_data) && !is.null(groups_data$community_labels)) groups_data$community_labels[community %in% unique(groups_data_new$node_list$community)] else NULL
+    community_stats <- if ("community_stats" %in% names(groups_data) && !is.null(groups_data$community_stats)) groups_data$community_stats[community %in% unique(node_list$community)] else NULL
+    filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
+    params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
+    
+    
     ## Overwrite groups_data object
     groups_data <- groups_data_new
     rm(groups_data_new)
+    groups_data <- Filter(Negate(is.null), groups_data)
+    
     
   } 
   
-  # Store active filter parameters
-  groups_data$filter <- list(
+  
+  ## Fetch previous filter arguments
+  if(!is.null(groups_data$filter))
+    
+    # Define %||% if not yet defined
+    `%||%` <- function(x, y) if (!is.null(x)) x else y
+  
+  # Define new filter values
+  new_filter <- list(
     by_col = by_col,
     by_val = by_val,
     edge_weight = edge_weight,
@@ -871,6 +754,27 @@ filter_groups_data <- function(groups_data,
     stringsimil_method = if (!is.null(stringsimil_cutoff)) stringsimil_method else NULL,
     stringsimil_ngram = if (!is.null(stringsimil_cutoff)) stringsimil_ngram else NULL
   )
+  
+  # Get existing filter (if any)
+  previous_filter <- if ("filter" %in% names(groups_data)) groups_data$filter else list()
+  
+  previous_filter
+  
+  # Custom merge: keep old if new is NULL
+  merged_filter <- mapply(
+    FUN = function(new, old) if (!is.null(new)) new else old,
+    new = new_filter,
+    old = previous_filter[names(new_filter)],
+    SIMPLIFY = FALSE
+  )
+  
+  # Add previous entries not listed in new_filter
+  extra_old <- previous_filter[setdiff(names(previous_filter), names(new_filter))]
+  merged_filter <- c(merged_filter, extra_old)
+  
+  # Drop NULLs
+  groups_data$filter <- Filter(Negate(is.null), merged_filter)
+  
   
   return(groups_data)
 }
