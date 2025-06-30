@@ -390,200 +390,294 @@ plot_coordinated_posts <- function(network_data,
 
 
 
-#' Plot communities in a network graph
+
+
+#' Plot Coordinated Communities in a Network
 #'
-#' This function generates a plot of communities in a network graph using a stress layout. The graph
-#' is filtered based on component size and edge weight thresholds. Node colors and soft community boundaries 
-#' are assigned based on community membership, and node labels for the top nodes by degree are displayed.
+#' Visualizes communities of coordinated accounts within a network graph, either as a single overview plot
+#' or as a grid of community-level plots with metadata side panels. Nodes represent accounts, edges reflect
+#' similarity or interaction, and layout and annotations emphasize coordination patterns.
 #'
-#' @param network_data A list containing the graph object (`$graph`) and node list (`$node_list`). Optionally, it can include 
-#' labelled communities (`$labelled_communities`), parameter list (`$param_list`), and filter information (`$filter_info`).
-#' @param edge_weight_threshold Numeric. If provided, edges with a weight below this threshold will be removed. Defaults to `NULL`.
-#' @param component_size_threshold Numeric. If provided, components smaller than this threshold will be removed. Defaults to `NULL`.
-#' @param palette_option Character. Specifies the Viridis palette option to use. Defaults to "A".
-#' @param end_color Numeric. The end point for the color gradient (between 0 and 1). Defaults to 1.
-#' @param start_color Numeric. The start point for the color gradient (between 0 and 1). Defaults to 0.
-#' @param title_prefix Character. A prefix to be added to the title of the plot. Defaults to `NULL`.
-#' @param n_top_nodes Numeric. The number of top nodes by degree to display labels for within each community. Defaults to 10.
-#' @param label.fontsize Numeric vector. First value provides font size of label, second for description.
+#' @param network_data A named list containing at least a simplified graph object (`network_data$graph`, as an `igraph`) 
+#'   and a node table (`network_data$node_list`, coercible to a tibble). Optionally includes:
+#'   - `params`: named list of parameters (e.g., cluster method, thresholds)
+#'   - `filter`: optional filter metadata
+#'   - `community_labels`: a data frame with `community`, `label`, `description`, `n_accs`, and `n_posts`
 #'
-#' @return A `ggplot` object representing the plotted network graph with communities, node labels, and boundary highlights.
+#' @param palette_option Character. Viridis palette option (e.g., "A", "B", "C", "D"). Passed to `viridis::viridis()`.
+#' @param end_color Numeric. End value for viridis color scale (between 0 and 1). Default is `1`.
+#' @param start_color Numeric. Start value for viridis color scale (between 0 and 1). Default is `0`.
+#' @param title_prefix Character. Optional prefix for the plot title. If `NULL`, a default title is used.
+#' @param n_top_nodes Integer. Number of top-degree nodes per community to label. Default is `10`.
+#' @param label_fontsize Integer. Base font size for text panels. If `NULL`, size is automatically scaled to `ncol`.
+#' @param by_community Logical. If `TRUE`, create individual plots per community with metadata side panels. 
+#'   If `FALSE`, show a single integrated graph. Default is `TRUE`.
+#' @param ncol Integer. Number of columns in the grid layout when `by_community = TRUE`. Default is `2`.
+#' @param expand_hairballs Logical. Whether to visually expand densely connected communities 
+#'   ("hairballs") to avoid overlap. Default is `TRUE`.
+#'
+#' @return A `ggplot` or `patchwork` object showing the coordinated communities, ready for rendering or saving.
+#'
+#' @details 
+#' Communities are plotted using a `stress` layout and optionally separated into grid plots with 
+#' accompanying text summaries. Top-degree nodes within each community are labeled. If metadata 
+#' (`community_labels`) is available, it will be shown alongside each subgraph.
+#'
+#' Dense subgraphs (high edge density and size) can be expanded for visual clarity using the 
+#' `expand_hairballs` argument.
 #' 
 #' @export
 plot_communities <- function(network_data, 
-                             edge_weight_threshold = NULL, 
-                             component_size_threshold = NULL, 
                              palette_option = "A", 
                              end_color = 1,
                              start_color = 0,
                              title_prefix = NULL,
                              n_top_nodes = 10,
-                             label.fontsize = c(8,6)) {
+                             label_fontsize = NULL,
+                             by_community = T,
+                             ncol = 2,
+                             expand_hairballs = TRUE) {
   
-  # Extract the graph and communities from the network object
-  g <- network_data$graph
-  node_list <- network_data$node_list
+  # Require packages
+  required_pkgs <- c("ggraph", "patchwork", "ggplot2", "igraph", "ggforce", "tidygraph", "ggtext", "scales")
   
-  # Remove nodes with degree <= 1
-  # g <- igraph::delete_vertices(g, which(igraph::degree(g) <= 1))
-  
-  # Simplify
-  g <- igraph::simplify(g, remove.multiple = TRUE, remove.loops = TRUE)
-  
-  
-  # Keep only components with size >= community_size_threshold
-  if(!is.null(component_size_threshold)){
-    g <- igraph::induced_subgraph(g, 
-                                  igraph::V(g)[igraph::components(g)$membership %in% 
-                                                 which(igraph::components(g)$csize >= component_size_threshold)])
-  }
-  
-  # Filter edges based on weight
-  if(!is.null(edge_weight_threshold)){
-    g <- igraph::subgraph.edges(g, igraph::E(g)[igraph::E(g)$weight > edge_weight_threshold])
-  }
-  
-  # Extract filter and parameter information
-  if("param_list" %in% names(network_data)){
-    # Drop NULL or NA elements
-    param_list <- network_data$param_list[!sapply(network_data$param_list, function(x) is.null(x) || is.na(x))]
-    # Bind the list into a string "name1: value1; name2: value2"
-    param_string <- paste0("Parameters: ", paste0(names(param_list), ": ", unlist(param_list), collapse = "; "))
-  }else if("post_data" %in% names(network_data) && "parameters" %in% names(network_data$post_data)){
-    param_string <- paste0("Parameters: ", network_data$post_data$parameters[[1]])
-  }else{
-    param_string = paste0("Parameters: ", "NA")
-  }
-  
-  
-  if("filter_info" %in% names(network_data)){
-    # Drop NULL or NA elements
-    filter_info <- network_data$filter_info[!sapply(network_data$filter_info, function(x) is.null(x) || is.na(x))]
-    
-    # Rename "min_size" to "min_community_size"
-    if ("min_size" %in% names(filter_info)) {
-      names(filter_info)[names(filter_info) == "min_size"] <- "min_community_size"
-    }
-    
-  }else{
-    filter_info <- list()
-  }
-  
-  
-  # Add component size
-  if (!is.null(component_size_threshold)) {
-    if ("min_component_size" %in% names(filter_info)) {
-      filter_info[names(filter_info) == "min_component_size"] <- component_size_threshold
-    }
-    if (!"min_component_size" %in% names(filter_info)) {
-      filter_info <- append(filter_info, list(min_component_size = component_size_threshold))
+  for (pkg in required_pkgs) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop(paste0("Package '", pkg, "' is required for this function. Please install it using install.packages(\"", pkg, "\")."), call. = FALSE)
     }
   }
   
-  # Add edge weight filter
-  if (!is.null(edge_weight_threshold)) {
-    if ("edge_weight_threshold" %in% names(filter_info)) {
-      filter_info[names(filter_info) == "edge_weight_plot"] <- edge_weight_threshold
-    }
-    if (!"edge_weight_threshold" %in% names(filter_info)) {
-      filter_info <- append(filter_info, list(edge_weight_plot = edge_weight_threshold))
-    }
+  
+  # Simplify graph and convert node list to tibble
+  g <- igraph::simplify(network_data$graph, remove.multiple = TRUE, remove.loops = TRUE)
+  node_list <- dplyr::as_tibble(network_data$node_list)
+  
+  ucfirst <- function(x) {
+    paste0(toupper(substring(x, 1, 1)), substring(x, 2))
+  }
+  # Extract parameters and filter info
+  get_caption <- function(x, label) {
+    if (!label %in% names(network_data)) return("")
+    x <- network_data[[label]]
+    x <- x[!sapply(x, function(v) is.null(v) || is.na(v))]
+    formatted <- mapply(function(nm, val) {
+      if (is.numeric(val)) {
+        format(round(val, 2), trim = TRUE)
+      } else {
+        as.character(val)
+      }
+    }, nm = names(x), val = x, USE.NAMES = FALSE)
+    paste0(ucfirst(label), ": ", paste(names(x), formatted, sep = ": ", collapse = "; "), ".")
   }
   
-  # Bind the list into a string "name1: value1; name2: value2"
-  filter_string <- paste0("Filter (plot): ", paste0(names(filter_info), ": ", unlist(filter_info), collapse = "; "))
+  param_string  <- get_caption(network_data, "params")
+  filter_string <- get_caption(network_data, "filter")
   
+  if (!is.null(network_data$params$cluster_method) && network_data$params$cluster_method != "FSA_V")
+    network_data$params$theta <- NULL
   
-  # Get unique communities and assign colors
-  unique_communities <- unique(node_list[node_list$account_id %in% igraph::V(g)$name, ]$community)
+  # Prepare color palette
+  unique_communities <- node_list |> dplyr::filter(account_id %in% igraph::V(g)$name) |> dplyr::pull(community) |> unique()
   community_colors <- viridis::viridis(length(unique_communities), option = palette_option, end = end_color, begin = start_color)
+  names(community_colors) <- unique_communities
   
-  # Calculate size attribute
+  # Font sizes
+  if (is.null(ncol)) ncol <- 1
+  if (is.null(label_fontsize)) label_fontsize <- round(max(6, 12 - length(unique_communities) / 12 - (ncol - 1) * 0.5), 0)
+  label.fontsize <- c(label_fontsize, label_fontsize - 2)
+  
+  # Title
+  title <- if (!is.null(title_prefix)) paste(title_prefix, "Coordinated communities") else "Coordinated communities"
+  
+  # Add degree
   igraph::V(g)$degree <- igraph::degree(g, mode = "all")
   
+  # Create tidygraph object and join community info
+  tidy_g <- g |>
+    tidygraph::as_tbl_graph() |>
+    tidygraph::activate(nodes)
   
-  ### Create labels
+  tidy_g <- tidy_g |>
+    dplyr::left_join(
+      node_list |> dplyr::select(-dplyr::any_of(names(tidygraph::as_tibble(tidy_g)))),
+      by = c("name" = "account_id")
+    )
   
-  ## Community member size stats
-  comm_stats_dt <- node_list[node_list$account_id %in% igraph::V(g)$name, ][, .N, by = community]
-  
-  # Add community labels if available
-  if ("labelled_communities" %in% names(network_data)) {
-    comm_df <- network_data$labelled_communities |>
-      dplyr::select(community, label = label_generated, desc = description_generated)
-    
-    comm_df <- dplyr::left_join(comm_stats_dt, comm_df) |> 
-      dplyr::mutate(community_label = paste0(community, " ", label, " [N=", N, "]")) 
-    
-  }else{
-    # Generate label & empty desc
-    comm_df <- comm_stats_dt |> dplyr::mutate(community_label = paste0(community, " [N=", N, "]")) 
-    comm_df$desc = " "
-  }
-  
-  # Convert graph to tidygraph format and join community information
-  tidy_g <- g |> 
-    tidygraph::as_tbl_graph() |> 
-    tidygraph::activate(nodes) |> 
-    dplyr::left_join(node_list, by = c("name" = "account_id"))  # Ensure you have account_id matching with name
-  
-  # Create a data frame with account names, degrees, and community memberships
-  node_degree_df <- tidy_g |> 
-    tidygraph::as_tibble() |>  # Convert to tibble
-    dplyr::select(account_name, degree, community)  # Use account_name instead of V(g)$name
-  
-  # Group by community, sort by degree in descending order, and select the top 10 nodes in each community
-  top_nodes <- node_degree_df |> 
-    dplyr::group_by(community) |> 
-    dplyr::arrange(community, desc(degree)) |> 
-    dplyr::slice_max(degree, n = n_top_nodes, with_ties = FALSE) |>  # Select top nodes by degree
+  # Get top nodes per community
+  top_nodes <- tidygraph::as_tibble(tidy_g) |>
+    dplyr::select(account_name, degree, community) |>
+    dplyr::group_by(community) |>
+    dplyr::arrange(dplyr::desc(degree)) |>
+    dplyr::slice_head(n = n_top_nodes) |>
     dplyr::ungroup()
   
-  # Compute the layout with ggraph
-  layout <- ggraph::create_layout(tidy_g, layout = "stress", bbox = 40)
   
-  # Make sure the community column is present in layout
-  layout <- layout |> dplyr::left_join(comm_df, by = "community")  # Join the labels for each community
+  # Community labels
+  comm_df <- if ("community_labels" %in% names(network_data)) {
+    network_data$community_labels |>
+      dplyr::select(community, label, description, n_accs, n_posts) |>
+      dplyr::mutate(community_label = paste0("[No.", community, "]: ", label))
+  } else {
+    node_list |>
+      dplyr::filter(account_id %in% igraph::V(g)$name) |>
+      dplyr::count(community, name = "N") |>
+      dplyr::mutate(community_label = paste0(community, " [N=", N, "]"), description = " ")
+  }
   
-  # Create title
-  title <- paste0(ifelse(!is.null(title_prefix), paste(title_prefix, "Coordinated top communities of size >= "), "Coordinated top communities of size >= "), 
-                  component_size_threshold)
+  # Layout with ggraph
+  layout <- ggraph::create_layout(tidy_g, layout = "stress") |>
+    dplyr::select(-dplyr::any_of("N")) |>
+    dplyr::mutate(community = as.character(community)) |>
+    dplyr::left_join(comm_df |> dplyr::mutate(community = as.character(community)), by = "community")
   
-  # Plot the graph with ggraph
-  p <- ggraph::ggraph(layout) +
-    ggraph::geom_edge_link(ggplot2::aes(edge_linewidth = weight), color = "grey", show.legend = FALSE) + 
-    ggraph::geom_node_point(ggplot2::aes(color = as.factor(community), size = degree), show.legend = FALSE) +
-    # Draw soft boundary around each community
-    ggforce::geom_mark_hull(
-      ggplot2::aes(x = x, 
-                   y = y, 
-                   group = as.factor(community), 
-                   label = community_label, 
-                   description = desc, 
-                   fill = as.factor(community),
-                   color = as.factor(community)),
-      concavity = 2,
-      alpha = 0.07,
-      label.fontsize = label.fontsize) +
-    # Add node labels for top 10 nodes per community
-    ggraph::geom_node_text(
-      data = layout |> dplyr::filter(account_name %in% top_nodes$account_name),  # Filter for top 10 nodes
-      ggplot2::aes(label = account_name,  size = log(degree)*10),  # Use account_name as label  # Adjust size if needed
-      repel = TRUE  # Avoid label overlap
-    ) +
-    ggplot2::scale_color_manual(values = community_colors) +
-    ggplot2::scale_fill_manual(values = community_colors, guide = "none") +
-    ggplot2::scale_alpha_continuous(range = c(0.1, 0.9)) +
-    ggraph::scale_edge_width(range = c(0.5, 5)) +
-    ggplot2::theme_void() +
-    ggplot2::theme(legend.position = "bottom") +
-    ggplot2::labs(title = title,
-                  subtitle = paste(param_string, filter_string),
-                  color = "Community") 
+  # Expand hairball communities if enabled
+  if (isTRUE(expand_hairballs)) {
+    hairball_comms <- tidygraph::as_tibble(tidy_g) |>
+      dplyr::select(name, community) |>
+      dplyr::inner_join(igraph::as_data_frame(g, what = "edges") |> 
+                          dplyr::count(from, name = "edge_count"), by = c("name" = "from")) |>
+      dplyr::group_by(community) |>
+      dplyr::summarise(size = dplyr::n(), edges = sum(edge_count, na.rm = TRUE), .groups = "drop") |>
+      dplyr::mutate(density = edges / pmax(1, size * (size - 1))) |>
+      dplyr::filter(density > 0.2, size > 50) |>
+      dplyr::pull(community)
+    
+    layout <- layout |> dplyr::mutate(
+      x = ifelse(community %in% hairball_comms, x * 1.5, x),
+      y = ifelse(community %in% hairball_comms, y * 1.5, y)
+    )
+  }
   
   
+  
+  if(by_community == F){
+    
+    # Plot the graph with ggraph
+    p <- ggraph::ggraph(layout) +
+      ggraph::geom_edge_link(ggplot2::aes(edge_linewidth = weight), color = "grey", show.legend = FALSE) + 
+      ggraph::geom_node_point(ggplot2::aes(color = as.factor(community), size = degree), show.legend = FALSE) +
+      # Draw soft boundary around each community
+      ggforce::geom_mark_hull(
+        ggplot2::aes(x = x, 
+                     y = y, 
+                     group = as.factor(community), 
+                     label = community_label, 
+                     description = paste0("[n_acc=", n_accs, " | n_post=", n_posts, "] \n", description),
+                     fill = as.factor(community),
+                     color = as.factor(community)),
+        concavity = 2,
+        alpha = 0.07,
+        label.fontsize = label.fontsize) +
+      # Add node labels for top 10 nodes per community
+      ggraph::geom_node_text(
+        data = layout |> dplyr::filter(account_name %in% top_nodes$account_name),  # Filter for top 10 nodes
+        ggplot2::aes(label = account_name,  size = log(degree)*10),  # Use account_name as label  # Adjust size if needed
+        repel = TRUE  # Avoid label overlap
+      ) +
+      ggplot2::scale_color_manual(values = community_colors) +
+      ggplot2::scale_fill_manual(values = community_colors, guide = "none") +
+      ggplot2::scale_alpha_continuous(range = c(0.1, 0.9)) +
+      ggraph::scale_edge_width(range = c(0.5, 5)) +
+      ggplot2::theme_void() +
+      ggplot2::theme(legend.position = 'none',
+                     plot.caption = ggplot2::element_text(hjust = 0)) +
+      ggplot2::labs(title = title,
+                    caption = paste0(stringr::str_wrap(param_string, width = 200, whitespace_only = T),
+                                     "\n", stringr::str_wrap(filter_string, width = 200, whitespace_only = T)),
+                    color = "Community")
+    
+  }else{
+    
+    plots <- list()
+    
+    for (c in unique_communities) {
+      
+      sub_layout <- layout |> dplyr::filter(community == c)
+      
+      # Extract edges that connect nodes within this community
+      edges_in_community <- igraph::as_data_frame(g, what = "edges") |>
+        dplyr::filter(from %in% sub_layout$name & to %in% sub_layout$name)
+      
+      g_plot <- ggraph::ggraph(
+        graph = tidygraph::tbl_graph(nodes = sub_layout, edges = edges_in_community),
+        layout = "manual", x = x, y = y, circular = FALSE  
+      ) +
+        ggraph::geom_edge_link(
+          ggplot2::aes(edge_width = sqrt(weight) * 0.5),
+          color = "grey", show.legend = TRUE
+        ) +
+        ggraph::geom_node_point(ggplot2::aes(color = as.factor(community), 
+                                             size = sqrt(degree) * 0.5), show.legend = FALSE
+        ) +
+        ggforce::geom_mark_hull(ggplot2::aes(x = x, 
+                                             y = y, 
+                                             group = as.factor(community), 
+                                             fill = as.factor(community), 
+                                             color = as.factor(community)),
+                                concavity = 1, 
+                                alpha = 0.05, 
+                                radius = grid::unit(2, "pt")) +
+        ggraph::geom_node_text(
+          data = sub_layout |> dplyr::filter(account_name %in% top_nodes$account_name),  # Filter for top 10 nodes
+          ggplot2::aes(label = account_name,  
+                       size = sqrt(degree) * 0.5), 
+          check_overlap = T,  # Use account_name as label  # Adjust size if needed
+          repel = TRUE, 
+          show.legend = FALSE  # Avoid label overlap
+        )  +
+        ggplot2::scale_color_manual(values = community_colors) +
+        ggplot2::scale_fill_manual(values = community_colors, guide = "none") +
+        ggplot2::scale_alpha_continuous(range = c(0.1, 0.9)) +
+        ggraph::scale_edge_width(range = c(0.5, 5)) +
+        ggplot2::theme_void( )+
+        ggplot2::theme(legend.position = 'none') + 
+        ggplot2::coord_cartesian(expand = TRUE)
+      
+      meta <- comm_df[community == c, ]
+      
+      wrapped_text <- paste0(
+        "**[No. ", meta$community, "]: ", meta$label, "**\n\n",
+        meta$description, "\n\n",
+        "*n_accs*: ", meta$n_accs, "   |   *n_posts*: ", meta$n_posts
+      )
+      
+      text_plot <- ggplot2::ggplot() +
+        ggtext::geom_textbox(
+          data = data.frame(x = 0, y = 1, label = wrapped_text),
+          ggplot2::aes(x = x, y = y, label = label),
+          box.color = NA, fill = NA,
+          hjust = 0, vjust = 1,
+          size = label_fontsize / ggplot2::.pt,
+          lineheight = 1.0,
+          width = grid::unit(.95, "npc"),
+          halign = 0#,
+          # markdown = TRUE
+        ) +
+        ggplot2::xlim(0, 1) + ggplot2::ylim(0, 1) +
+        ggplot2::theme_void()
+      
+      plots[[length(plots) + 1]] <- patchwork::wrap_plots(
+        g_plot, text_plot,
+        ncol = 2, widths = c(2, 1.5)
+      )
+      
+    }
+    
+    p <- patchwork::wrap_plots(plots, ncol = ncol) +
+      patchwork::plot_annotation(
+        title = title,
+        caption = paste0(stringr::str_wrap(param_string, width = 200, whitespace_only = T),
+                         "\n", stringr::str_wrap(filter_string, width = 200, whitespace_only = T)),
+        theme = ggplot2::theme(
+          plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
+          plot.caption = ggplot2::element_text(size = 9, hjust = 0)
+        )
+      )
+    
+  }
   
   return(p)
 }
+
 
 

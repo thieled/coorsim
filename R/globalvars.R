@@ -90,7 +90,14 @@ utils::globalVariables(c(".",
                          "slice",
                          "sum_user_share_comm",
                          "sum_user_share_comm_total",
-                         "text_slice"
+                         "text_slice",
+                         "edge_count",
+                         "edges",
+                         "lang",
+                         "n_accs",
+                         "n_posts",
+                         "size",
+                         "density"
                          ))
 
 

@@ -195,6 +195,42 @@ augment_groups_data <- function(
 
 
 
+
+#' Filter a detected group structure based on various criteria
+#'
+#' This function filters a detected group structure (`groups_data`) by a wide range of optional thresholds
+#' and selection criteria, including account-level, post-level, and similarity-based filters. It supports
+#' optional re-detection of groups after filtering similarity pairs (`sim_dt`), and returns a cleaned, 
+#' consistent `groups_data` object.
+#'
+#' @param groups_data A list returned by `coorsim_detect_groups()` or `augment_groups_data()`.
+#' @param by_col Column name in `post_data` to filter by (e.g. `"lang"`, `"country"`).
+#' @param by_val Value(s) to keep in `by_col`.
+#' @param edge_weight Minimum edge weight to retain in the similarity network.
+#' @param time_window Maximum time difference allowed between posts (in seconds).
+#' @param min_simil Minimum cosine similarity allowed between post embeddings.
+#' @param min_comm_size Minimum number of accounts in a community.
+#' @param min_comp_size Minimum number of nodes in a graph component.
+#' @param min_degree Minimum node degree.
+#' @param min_participation Minimum number of post-level similarity relations per account.
+#' @param communities_index Vector of community indices to keep.
+#' @param quantile_accountwise Drop communities below a given quantile of account size.
+#' @param quantile_postwise Drop communities below a given quantile of post size.
+#' @param top_n_accountwise Keep the top-n largest communities by account count.
+#' @param top_n_postwise Keep the top-n largest communities by post count.
+#' @param stringsimil_cutoff Optional. Additional filter: minimum geometric mean of cosine similarity and string similarity.
+#' @param stringsimil_method String similarity method passed to `stringdist::stringsim()` (e.g. `"cosine"`, `"jaccard"`).
+#' @param stringsimil_ngram Integer n-gram size used in string similarity.
+#' @param nthread Number of threads used in `stringsim` filtering.
+#' @param rerun_detect_groups Logical. Whether to re-run group detection after filtering similarity pairs.
+#' @param verbose Logical. Whether to print informative messages.
+#' @param ... Additional arguments passed to `coorsim_detect_groups()` if rerun is triggered.
+#'
+#' @return A filtered `groups_data` list with updated `$filter` slot for reproducibility.
+#'
+#' @seealso [coorsim_detect_groups()], [augment_groups_data()]
+#'
+#' @export
 filter_groups_data <- function(groups_data,
                                by_col = NULL,
                                by_val = NULL,
