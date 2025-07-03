@@ -89,11 +89,12 @@ augment_groups_data <- function(
     }
   }
   
-  # Add prefix to users columns (except account_id)
+  # Add prefix to user columns (except account_id), but only if not already prefixed   <<<<< Changed 2025-07-03
   user_cols_to_keep <- c("account_id", other_user_vars)
   users <- users[, intersect(user_cols_to_keep, names(users)), with = FALSE]
-  user_cols <- setdiff(names(users), c("account_id"))
-  data.table::setnames(users, user_cols, paste0("account_", user_cols))
+  user_cols <- setdiff(names(users), "account_id")
+  user_cols_renamed <- ifelse(startsWith(user_cols, "account_"), user_cols, paste0("account_", user_cols))
+  data.table::setnames(users, user_cols, user_cols_renamed)
   
   ### De-duplicating users ###
   if (any(duplicated(users[["account_id"]]))) {
@@ -272,6 +273,14 @@ filter_groups_data <- function(groups_data,
     filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
     params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
     
+    # Clean up duplicated "account_" prefixes in node_list
+    node_cols <- names(node_list)
+    dup_account_cols <- grep("^account_account_", node_cols, value = TRUE)
+    cleaned_names <- sub("^account_account_", "account_", dup_account_cols)
+    if (length(dup_account_cols)) {
+      data.table::setnames(node_list, old = dup_account_cols, new = cleaned_names)
+    }
+    
     result <- list(
       graph = g,
       communities = communities,
@@ -341,6 +350,14 @@ filter_groups_data <- function(groups_data,
     # Step 4: node_list
     nodes <- unique(c(sim_dt$account_id, sim_dt$account_id_y))
     node_list <- node_list[account_id %in% nodes]
+    
+    # Clean up duplicated "account_" prefixes in node_list
+    node_cols <- names(node_list)
+    dup_account_cols <- grep("^account_account_", node_cols, value = TRUE)
+    cleaned_names <- sub("^account_account_", "account_", dup_account_cols)
+    if (length(dup_account_cols)) {
+      data.table::setnames(node_list, old = dup_account_cols, new = cleaned_names)
+    }
     
     # Step 5: Create the igraph object
     g <- igraph::graph_from_data_frame(d = edge_list, 
@@ -490,6 +507,15 @@ filter_groups_data <- function(groups_data,
     if(trigger){
       
       node_list <- data.table::copy(groups_data$node_list)
+      
+      # Clean up duplicated "account_" prefixes in node_list
+      node_cols <- names(node_list)
+      dup_account_cols <- grep("^account_account_", node_cols, value = TRUE)
+      cleaned_names <- sub("^account_account_", "account_", dup_account_cols)
+      if (length(dup_account_cols)) {
+        data.table::setnames(node_list, old = dup_account_cols, new = cleaned_names)
+      }
+      
       user_data <- node_list[, .SD, .SDcols = grep("^account_", names(node_list), value = TRUE)]
       other_user_vars <- setdiff(names(user_data), c("account_id", "account_name"))
       return_post_dt <- "post_data" %in% names(groups_data)
@@ -686,6 +712,15 @@ filter_groups_data <- function(groups_data,
   if(rerun_detect_groups){
     
     node_list <- data.table::copy(groups_data$node_list)
+    
+    # Clean up duplicated "account_" prefixes in node_list
+    node_cols <- names(node_list)
+    dup_account_cols <- grep("^account_account_", node_cols, value = TRUE)
+    cleaned_names <- sub("^account_account_", "account_", dup_account_cols)
+    if (length(dup_account_cols)) {
+      data.table::setnames(node_list, old = dup_account_cols, new = cleaned_names)
+    }
+    
     sim_dt <- data.table::copy(groups_data$sim_dt)
     
     user_data <- node_list[, .SD, .SDcols = grep("^account_", names(node_list), value = TRUE)]
@@ -794,8 +829,6 @@ filter_groups_data <- function(groups_data,
   # Get existing filter (if any)
   previous_filter <- if ("filter" %in% names(groups_data)) groups_data$filter else list()
   
-  previous_filter
-  
   # Custom merge: keep old if new is NULL
   merged_filter <- mapply(
     FUN = function(new, old) if (!is.null(new)) new else old,
@@ -810,7 +843,6 @@ filter_groups_data <- function(groups_data,
   
   # Drop NULLs
   groups_data$filter <- Filter(Negate(is.null), merged_filter)
-  
   
   return(groups_data)
 }
