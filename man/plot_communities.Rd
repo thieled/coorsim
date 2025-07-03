@@ -12,9 +12,10 @@ plot_communities(
   title_prefix = NULL,
   n_top_nodes = 10,
   label_fontsize = NULL,
-  by_community = T,
+  by_community = TRUE,
   ncol = 2,
-  expand_hairballs = TRUE
+  expand_hairballs = NULL,
+  use_palette = NULL
 )
 }
 \arguments{
@@ -41,8 +42,10 @@ If `FALSE`, show a single integrated graph. Default is `TRUE`.}
 
 \item{ncol}{Integer. Number of columns in the grid layout when `by_community = TRUE`. Default is `2`.}
 
-\item{expand_hairballs}{Logical. Whether to visually expand densely connected communities 
-("hairballs") to avoid overlap. Default is `TRUE`.}
+\item{expand_hairballs}{Numeric. Factor to visually expand densely connected communities 
+("hairballs") to avoid overlap. Default is `NULL`.}
+
+\item{use_palette}{Function. User-defined palette from a function, e.g. `ggsci::pal_aaas()`. Overrides the default viridis palette. Default is `NULL`.}
 }
 \value{
 A `ggplot` or `patchwork` object showing the coordinated communities, ready for rendering or saving.

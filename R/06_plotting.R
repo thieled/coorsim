@@ -20,6 +20,7 @@
 #'
 #' @return A `ggplot2` object representing the coordinated posts of the communities.
 #'
+#' @import data.table
 #' @export
 plot_coordinated_posts <- function(network_data, 
                                    by_communtiy = T,
@@ -36,7 +37,6 @@ plot_coordinated_posts <- function(network_data,
                                    n_random_rows = 2,
                                    seed = 42,
                                    verbose = T) {
-  
   
   
   if(!"post_data" %in% names(network_data)){
@@ -413,8 +413,9 @@ plot_coordinated_posts <- function(network_data,
 #' @param by_community Logical. If `TRUE`, create individual plots per community with metadata side panels. 
 #'   If `FALSE`, show a single integrated graph. Default is `TRUE`.
 #' @param ncol Integer. Number of columns in the grid layout when `by_community = TRUE`. Default is `2`.
-#' @param expand_hairballs Logical. Whether to visually expand densely connected communities 
-#'   ("hairballs") to avoid overlap. Default is `TRUE`.
+#' @param expand_hairballs Numeric. Factor to visually expand densely connected communities 
+#'   ("hairballs") to avoid overlap. Default is `NULL`.
+#' @param use_palette Function. User-defined palette from a function, e.g. `ggsci::pal_aaas()`. Overrides the default viridis palette. Default is `NULL`.
 #'
 #' @return A `ggplot` or `patchwork` object showing the coordinated communities, ready for rendering or saving.
 #'
@@ -434,9 +435,10 @@ plot_communities <- function(network_data,
                              title_prefix = NULL,
                              n_top_nodes = 10,
                              label_fontsize = NULL,
-                             by_community = T,
+                             by_community = TRUE,
                              ncol = 2,
-                             expand_hairballs = TRUE) {
+                             expand_hairballs = NULL,
+                             use_palette = NULL) {
   
   # Require packages
   required_pkgs <- c("ggraph", "patchwork", "ggplot2", "igraph", "ggforce", "tidygraph", "ggtext", "scales")
@@ -473,13 +475,23 @@ plot_communities <- function(network_data,
   param_string  <- get_caption(network_data, "params")
   filter_string <- get_caption(network_data, "filter")
   
-  if (!is.null(network_data$params$cluster_method) && network_data$params$cluster_method != "FSA_V")
-    network_data$params$theta <- NULL
+  if (!is.null(network_data$params$cluster_method) && network_data$params$cluster_method != "FSA_V") network_data$params$theta <- NULL
   
   # Prepare color palette
-  unique_communities <- node_list |> dplyr::filter(account_id %in% igraph::V(g)$name) |> dplyr::pull(community) |> unique()
-  community_colors <- viridis::viridis(length(unique_communities), option = palette_option, end = end_color, begin = start_color)
+  unique_communities <- unique(dplyr::filter(node_list, account_id %in% igraph::V(g)$name)$community)
+  n_colors <- length(unique_communities)
+  
+  community_colors <- if (is.null(use_palette)) {
+    viridis::viridis(n_colors, option = palette_option, begin = start_color, end = end_color)
+  } else {
+    if (!is.function(use_palette)) stop("'use_palette' must be a function (e.g., ggsci::pal_d3('category20'))")
+    cols <- use_palette(n_colors)
+    if (length(cols) < n_colors) stop(sprintf("Palette has only %d colors but %d are required.", length(cols), n_colors))
+    cols
+  }
   names(community_colors) <- unique_communities
+  
+  
   
   # Font sizes
   if (is.null(ncol)) ncol <- 1
@@ -513,15 +525,29 @@ plot_communities <- function(network_data,
   
   
   # Community labels
-  comm_df <- if ("community_labels" %in% names(network_data)) {
-    network_data$community_labels |>
+  if ("community_labels" %in% names(network_data)) {
+    
+    comm_df <- network_data$community_labels |>
       dplyr::select(community, label, description, n_accs, n_posts) |>
       dplyr::mutate(community_label = paste0("[No.", community, "]: ", label))
   } else {
-    node_list |>
-      dplyr::filter(account_id %in% igraph::V(g)$name) |>
-      dplyr::count(community, name = "N") |>
-      dplyr::mutate(community_label = paste0(community, " [N=", N, "]"), description = " ")
+    
+    node_list_s <- node_list |>
+      dplyr::filter(account_id %in% igraph::V(g)$name) |> 
+      dplyr::select(account_id, community)
+    
+    # Calculate n_posts from sim_dt
+    post_count <- unique(data.table::rbindlist(list(
+      sim_dt[, .(post_id, account_id)],
+      sim_dt[, .(post_id = post_id_y, account_id = account_id_y)]
+    )))[, .N, by = account_id][, `:=` (n_posts = N, N = NULL)]
+    
+    comm_df <- unique(merge(post_count, node_list_s, by = "account_id", all.x = TRUE))[
+      , .(n_accs = uniqueN(account_id), n_posts = sum(n_posts)), by = community
+    ][
+      , `:=` (community_label = paste0(community, " [N=", n_accs, "]"), description = " ")
+    ] |> as.data.frame()
+    
   }
   
   # Layout with ggraph
@@ -531,7 +557,7 @@ plot_communities <- function(network_data,
     dplyr::left_join(comm_df |> dplyr::mutate(community = as.character(community)), by = "community")
   
   # Expand hairball communities if enabled
-  if (isTRUE(expand_hairballs)) {
+  if (!is.null(expand_hairballs)) {
     hairball_comms <- tidygraph::as_tibble(tidy_g) |>
       dplyr::select(name, community) |>
       dplyr::inner_join(igraph::as_data_frame(g, what = "edges") |> 
@@ -539,12 +565,12 @@ plot_communities <- function(network_data,
       dplyr::group_by(community) |>
       dplyr::summarise(size = dplyr::n(), edges = sum(edge_count, na.rm = TRUE), .groups = "drop") |>
       dplyr::mutate(density = edges / pmax(1, size * (size - 1))) |>
-      dplyr::filter(density > 0.2, size > 50) |>
+      dplyr::filter(density > 0.2, size > 20) |>
       dplyr::pull(community)
     
     layout <- layout |> dplyr::mutate(
-      x = ifelse(community %in% hairball_comms, x * 1.5, x),
-      y = ifelse(community %in% hairball_comms, y * 1.5, y)
+      x = ifelse(community %in% hairball_comms, x * expand_hairballs, x),
+      y = ifelse(community %in% hairball_comms, y * expand_hairballs, y)
     )
   }
   
@@ -585,6 +611,7 @@ plot_communities <- function(network_data,
                     caption = paste0(stringr::str_wrap(param_string, width = 200, whitespace_only = T),
                                      "\n", stringr::str_wrap(filter_string, width = 200, whitespace_only = T)),
                     color = "Community")
+    
     
   }else{
     
@@ -633,7 +660,9 @@ plot_communities <- function(network_data,
         ggplot2::theme(legend.position = 'none') + 
         ggplot2::coord_cartesian(expand = TRUE)
       
-      meta <- comm_df[community == c, ]
+      
+      
+      meta <- comm_df |> dplyr::filter(community == c) ## <<< filter
       
       wrapped_text <- paste0(
         "**[No. ", meta$community, "]: ", meta$label, "**\n\n",
@@ -650,8 +679,7 @@ plot_communities <- function(network_data,
           size = label_fontsize / ggplot2::.pt,
           lineheight = 1.0,
           width = grid::unit(.95, "npc"),
-          halign = 0#,
-          # markdown = TRUE
+          halign = 0
         ) +
         ggplot2::xlim(0, 1) + ggplot2::ylim(0, 1) +
         ggplot2::theme_void()
