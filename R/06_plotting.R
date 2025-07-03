@@ -537,13 +537,14 @@ plot_communities <- function(network_data,
       dplyr::select(account_id, community)
     
     # Calculate n_posts from sim_dt
+    sim_dt <- data.table::copy(network_data$sim_dt)
     post_count <- unique(data.table::rbindlist(list(
       sim_dt[, .(post_id, account_id)],
       sim_dt[, .(post_id = post_id_y, account_id = account_id_y)]
     )))[, .N, by = account_id][, `:=` (n_posts = N, N = NULL)]
     
     comm_df <- unique(merge(post_count, node_list_s, by = "account_id", all.x = TRUE))[
-      , .(n_accs = uniqueN(account_id), n_posts = sum(n_posts)), by = community
+      , .(n_accs = data.table::uniqueN(account_id), n_posts = sum(n_posts)), by = community
     ][
       , `:=` (community_label = paste0(community, " [N=", n_accs, "]"), description = " ")
     ] |> as.data.frame()
