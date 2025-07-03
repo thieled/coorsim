@@ -97,7 +97,9 @@ utils::globalVariables(c(".",
                          "n_accs",
                          "n_posts",
                          "size",
-                         "density"
+                         "density", 
+                         "account_name_y", 
+                         "community_y"
                          ))
 
 
