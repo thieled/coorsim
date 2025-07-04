@@ -46,7 +46,7 @@
 #' @import data.table
 #' 
 #' @export
-get_campaign_metrics <- function(groups_data,
+get_community_metrics <- function(groups_data,
                                  account_description = NULL,
                                  account_creation_date = NULL,
                                  follower = NULL,
@@ -339,7 +339,12 @@ get_campaign_metrics <- function(groups_data,
   
   if(verbose) cli::cli_progress_done()
   
-  return(metrics_dt)
+  
+  
+  groups_data$community_metrics <- metrics_dt
+  
+  
+  return(groups_data)
   
   
 }
