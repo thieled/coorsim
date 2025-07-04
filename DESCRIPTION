@@ -1,7 +1,7 @@
 Package: coorsim
 Type: Package
 Title: Detects Coordinated Social Media Manipulation Based on Co-Similarity
-Version: 0.0.3.004
+Version: 0.0.3.100
 Date: 2024-10-11
 Authors@R: 
     person("Daniel", "Thiele", email="daniel.thiele@fu-berlin.de", role = c("cre", "aut"))
@@ -40,20 +40,21 @@ Depends:
     R (>= 4.3.0)
 NeedsCompilation: yes
 Suggests: 
-    testthat (>= 3.0.0),
     emoji,
-    stringi,
-    rollama,
-    parallel,
     future,
     httr,
-    stringdist,
     ggplot2,
     ggraph, 
-    ggforce,  
-    patchwork,
+    ggforce,
     ggrepel,
     ggtext,
+    parallel,
+    patchwork,
+    quanteda,
+    rollama,
+    stringdist,
+    stringi,
+    testthat (>= 3.0.0),
     tidygraph,
     viridis
 Config/testthat/edition: 3

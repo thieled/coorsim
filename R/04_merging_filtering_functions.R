@@ -303,17 +303,23 @@ filter_groups_data <- function(groups_data,
   if (!is.null(by_col)) {
     if (!"sim_dt" %in% names(groups_data)) stop("No 'sim_dt' found. Filtering 'by' not possible.")
     if (!"post_data" %in% names(groups_data)) stop("No 'sim_dt' found. Filtering 'by' not possible.")
-    
     if (is.null("by_val")) stop("No 'by_val' specified. Please specify a value.")
     
     post_data <- data.table::copy(groups_data$post_data)
     sim_dt <- data.table::copy(groups_data$sim_dt)
     
-    
     node_list <- data.table::copy(groups_data$node_list)
     user_data <- node_list[, .SD, .SDcols = grep("^account_", names(node_list), value = TRUE)]
     other_user_vars <- setdiff(names(user_data), c("account_id", "account_name"))
     return_post_dt <- "post_data" %in% names(groups_data)
+    
+    # Clean up duplicated "account_" prefixes in node_list
+    node_cols <- names(node_list)
+    dup_account_cols <- grep("^account_account_", node_cols, value = TRUE)
+    cleaned_names <- sub("^account_account_", "account_", dup_account_cols)
+    if (length(dup_account_cols)) {
+      data.table::setnames(node_list, old = dup_account_cols, new = cleaned_names)
+    }
     
     if (verbose) cli::cli_inform("Filtering by {by_col} = {by_val}.")
     
@@ -567,7 +573,7 @@ filter_groups_data <- function(groups_data,
         other_post_vars = NULL
       }
       
-      groups_data_new <- coorsim::augment_groups_data(groups_data = groups_data_new, 
+      groups_data_new <- augment_groups_data(groups_data = groups_data_new, 
                                                       post_data = post_data,
                                                       user_data = user_data,
                                                       other_user_vars = other_user_vars,
@@ -774,7 +780,7 @@ filter_groups_data <- function(groups_data,
       other_post_vars = NULL
     }
     
-    groups_data_new <- coorsim::augment_groups_data(groups_data = groups_data_new, 
+    groups_data_new <- augment_groups_data(groups_data = groups_data_new, 
                                                     post_data = post_data,
                                                     user_data = user_data,
                                                     other_user_vars = other_user_vars,

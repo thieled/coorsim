@@ -99,7 +99,14 @@ utils::globalVariables(c(".",
                          "size",
                          "density", 
                          "account_name_y", 
-                         "community_y"
+                         "community_y",
+                         "a_age_h",
+                         "a_ffr",
+                         "a_npost", 
+                         "account_last_post", 
+                         "account_n_post", 
+                         "is_within", 
+                         "sd"
                          ))
 
 
