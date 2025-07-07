@@ -367,15 +367,11 @@ get_content_metrics <- function(dt, content_col = "text", id_col = "post_id", pr
   stopifnot(all(c(id_col, "community") %in% names(dt)))
   stopifnot(content_col %in% names(dt))
   
-  if (!requireNamespace("quanteda", quietly = TRUE)) {
-    stop("Package 'quanteda' is required for this function. Please install it.")
-  }
-  
   dt <- data.table::copy(dt)
   content <- dt[[content_col]]
-  nchar_vec <- nchar(content)
+  dt[, nchar := stringi::stri_length(content)]
   
-  # Tokenize words
+  # Word tokens (main tokens object)
   toks_word <- quanteda::tokens(
     content,
     what = "word",
@@ -385,66 +381,55 @@ get_content_metrics <- function(dt, content_col = "text", id_col = "post_id", pr
     remove_url = TRUE
   )
   
-  ntoken <- lengths(toks_word)
+  ntoken <- quanteda::ntoken(toks_word)
   ntype <- vapply(toks_word, function(x) length(unique(x)), integer(1L))
   ttr <- ifelse(ntoken > 0, ntype / ntoken, NA_real_)
   
-  mean_token_length <- vapply(toks_word, function(x) {
+  token_lengths <- lapply(toks_word, stringi::stri_length)
+  token_length <- vapply(token_lengths, function(x) if (length(x) > 0) mean(x) else NA_real_, numeric(1L))
+  tokens_gt6_ratio <- vapply(token_lengths, function(x) if (length(x) > 0) mean(x > 6) else NA_real_, numeric(1L))
+  
+  # Character-level tokens for emoji and punctuation
+  toks_char <- quanteda::tokens(content, what = "character", remove_url = TRUE)
+  emoji_ratio <- vapply(toks_char, function(x) {
     if (length(x) == 0L) return(NA_real_)
-    mean(nchar(x))
+    sum(grepl("\\p{Emoji}", x, perl = TRUE)) / length(x)
   }, numeric(1L))
   
-  tokens_gt6_ratio <- vapply(toks_word, function(x) {
-    if (length(x) == 0L) return(NA_real_)
-    mean(nchar(x) > 6)
-  }, numeric(1L))
-  
-  emoji_rate <- vapply(content, function(x) {
-    all_chars <- unlist(quanteda::tokens(x, what = "character", remove_url = TRUE))
-    emoji <- grep("\\p{Emoji}", all_chars, perl = TRUE, value = TRUE)
-    if (length(all_chars) == 0L) return(NA_real_)
-    length(emoji) / length(all_chars)
-  }, numeric(1L))
-  
-  punct_counts <- vapply(content, function(x) {
-    chars <- unlist(quanteda::tokens(x, what = "character", remove_url = TRUE))
-    sum(grepl("^[[:punct:]]$", chars))
+  punct_counts <- vapply(toks_char, function(x) {
+    sum(grepl("^[[:punct:]]$", x))
   }, integer(1L))
   
-  punctuation_rate <- ifelse(ntoken > 0, punct_counts / ntoken, NA_real_)
+  punct_ratio <- ifelse(ntoken > 0, punct_counts / ntoken, NA_real_)
   
-  # Create metrics table
+  
+  # Assemble metrics
   metrics_dt <- data.table::data.table(
     community = dt$community,
-    nchar = nchar_vec,
+    nchar = dt$nchar,
     ntoken = ntoken,
     ntype = ntype,
     ttr = ttr,
-    token_length = mean_token_length,
+    token_length = token_length,
     tokens_gt6_ratio = tokens_gt6_ratio,
-    punct_ratio = punctuation_rate,
-    emoji_ratio = emoji_rate
+    punct_ratio = punct_ratio,
+    emoji_ratio = emoji_ratio
   )
   
-  # Replace NA with 0 if column is not entirely NA
+  # Replace NA with 0 where appropriate
   for (j in names(metrics_dt)) {
     if (is.numeric(metrics_dt[[j]]) && !all(is.na(metrics_dt[[j]]))) {
       metrics_dt[is.na(get(j)), (j) := 0]
     }
   }
   
-  metric_names <- setdiff(names(metrics_dt), "community")
+  metric_vars <- setdiff(names(metrics_dt), "community")
   
-  # Aggregate by community
-  mean_dt <- metrics_dt[, lapply(.SD, mean), by = community, .SDcols = metric_names]
-  sd_dt   <- metrics_dt[, lapply(.SD, sd),   by = community, .SDcols = metric_names]
+  mean_dt <- metrics_dt[, lapply(.SD, mean), by = community, .SDcols = metric_vars]
+  sd_dt   <- metrics_dt[, lapply(.SD, sd),   by = community, .SDcols = metric_vars]
   
-  # Rename columns
-  data.table::setnames(mean_dt, old = metric_names, new = paste0(prefix, metric_names, "_mean"))
-  data.table::setnames(sd_dt,   old = metric_names, new = paste0(prefix, metric_names, "_sd"))
+  data.table::setnames(mean_dt, old = metric_vars, new = paste0(prefix, metric_vars, "_mean"))
+  data.table::setnames(sd_dt,   old = metric_vars, new = paste0(prefix, metric_vars, "_sd"))
   
-  # Return merged result
-  agg_dt <- merge(mean_dt, sd_dt, by = "community", sort = FALSE)
-  return(agg_dt[])
+  return(merge(mean_dt, sd_dt, by = "community", sort = FALSE))
 }
-

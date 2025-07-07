@@ -190,6 +190,25 @@ augment_groups_data <- function(
     
   }
   
+  # Clean duplicated "account_" prefixes in node_list and post_data
+  for (tbl_name in c("node_list", "post_data")) {
+    if (!is.null(groups_data[[tbl_name]]) && data.table::is.data.table(groups_data[[tbl_name]])) {
+      dt <- groups_data[[tbl_name]]
+      cols <- names(dt)
+      
+      # Match any "account_" repeated two or more times
+      dup_cols <- grep("^account_(account_)+", cols, value = TRUE)
+      new_names <- sub("^account_(account_)+", "account_", dup_cols)
+      
+      if (length(dup_cols)) {
+        data.table::setnames(dt, old = dup_cols, new = new_names)
+      }
+      
+      # Reassign cleaned table
+      groups_data[[tbl_name]] <- dt
+    }
+  }
+  
   # Return the augmented similarity table
   return(groups_data)
 }
@@ -849,6 +868,25 @@ filter_groups_data <- function(groups_data,
   
   # Drop NULLs
   groups_data$filter <- Filter(Negate(is.null), merged_filter)
+  
+  # Clean duplicated "account_" prefixes in node_list and post_data
+  for (tbl_name in c("node_list", "post_data")) {
+    if (!is.null(groups_data[[tbl_name]]) && data.table::is.data.table(groups_data[[tbl_name]])) {
+      dt <- groups_data[[tbl_name]]
+      cols <- names(dt)
+      
+      # Match any "account_" repeated two or more times
+      dup_cols <- grep("^account_(account_)+", cols, value = TRUE)
+      new_names <- sub("^account_(account_)+", "account_", dup_cols)
+      
+      if (length(dup_cols)) {
+        data.table::setnames(dt, old = dup_cols, new = new_names)
+      }
+      
+      # Reassign cleaned table
+      groups_data[[tbl_name]] <- dt
+    }
+  }
   
   return(groups_data)
 }
