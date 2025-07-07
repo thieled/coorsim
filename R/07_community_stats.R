@@ -361,6 +361,7 @@ get_community_metrics <- function(groups_data,
 #' @param prefix Prefix to add to all metric columns in output (default: "c_")
 #'
 #' @return data.table with one row per community and aggregated metrics
+#' @import data.table
 #' @export
 get_content_metrics <- function(dt, content_col = "text", id_col = "post_id", prefix = "c_") {
   stopifnot(data.table::is.data.table(dt))
