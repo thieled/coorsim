@@ -71,6 +71,16 @@ plot_posts <- function(network_data,
     }
   }
   
+  # Require packages
+  required_pkgs <- c("patchwork", "ggplot2", "viridis", "ggrepel")
+  
+  for (pkg in required_pkgs) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop(paste0("Package '", pkg, "' is required for this function. Please install it using install.packages(\"", pkg, "\")."), call. = FALSE)
+    }
+  }
+  
+  
   # Create copy of dt
   node_list <- dplyr::as_tibble(network_data$node_list)
   dt <- data.table::copy(network_data$post_data)
@@ -506,7 +516,7 @@ plot_communities <- function(network_data,
                              use_palette = NULL) {
   
   # Require packages
-  required_pkgs <- c("ggraph", "patchwork", "ggplot2", "igraph", "ggforce", "tidygraph", "ggtext", "scales")
+  required_pkgs <- c("ggraph", "patchwork", "ggplot2", "igraph", "ggforce", "tidygraph", "ggtext", "scales", "viridis")
   
   for (pkg in required_pkgs) {
     if (!requireNamespace(pkg, quietly = TRUE)) {

@@ -288,7 +288,7 @@ filter_groups_data <- function(groups_data,
     sim_dt <- if ("sim_dt" %in% names(groups_data)  && !is.null(groups_data$sim_dt)) groups_data$sim_dt[account_id %in% valid_accounts & account_id_y %in% valid_accounts] else NULL
     user_labels <- if ("user_labels" %in% names(groups_data)  && !is.null(groups_data$user_labels)) groups_data$user_labels[account_id %in% valid_accounts] else NULL
     community_labels <- if ("community_labels" %in% names(groups_data)  && !is.null(groups_data$community_labels)) groups_data$community_labels[community %in% unique(node_list$community)] else NULL
-    community_stats <- if ("community_stats" %in% names(groups_data) && !is.null(groups_data$community_stats)) groups_data$community_stats[community %in% unique(node_list$community)] else NULL
+    community_metrics <- if ("community_metrics" %in% names(groups_data) && !is.null(groups_data$community_metrics)) groups_data$community_metrics[community %in% unique(node_list$community)] else NULL
     filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
     params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
     
@@ -311,7 +311,7 @@ filter_groups_data <- function(groups_data,
       filter = filter,
       user_labels = user_labels,
       community_labels = community_labels,
-      community_stats = community_stats
+      community_metrics = community_metrics
     )
     
     result <- Filter(Negate(is.null), result)
@@ -398,7 +398,7 @@ filter_groups_data <- function(groups_data,
     # Subset remaining objects
     user_labels <- if ("user_labels" %in% names(groups_data)  && !is.null(groups_data$user_labels)) data.table::copy(groups_data$user_labels[account_id %in% nodes]) else NULL
     community_labels <- if ("community_labels" %in% names(groups_data)  && !is.null(groups_data$community_labels)) groups_data$community_labels[community %in% unique(node_list$community)] else NULL
-    community_stats <- if ("community_stats" %in% names(groups_data) && !is.null(groups_data$community_stats)) groups_data$community_stats[community %in% unique(node_list$community)] else NULL
+    community_metrics <- if ("community_metrics" %in% names(groups_data) && !is.null(groups_data$community_metrics)) groups_data$community_metrics[community %in% unique(node_list$community)] else NULL
     filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
     params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
     
@@ -412,7 +412,7 @@ filter_groups_data <- function(groups_data,
                         filter = filter,
                         user_labels = user_labels,
                         community_labels = community_labels,
-                        community_stats = community_stats
+                        community_metrics = community_metrics
     )    
     
     
@@ -603,7 +603,7 @@ filter_groups_data <- function(groups_data,
       # Subset remaining objects
       groups_data_new$user_labels <- if ("user_labels" %in% names(groups_data) && !is.null(groups_data$user_labels)) groups_data$user_labels[account_id %in% groups_data_new$node_list$account_id] else NULL
       groups_data_new$community_labels <- if ("community_labels" %in% names(groups_data) && !is.null(groups_data$community_labels)) groups_data$community_labels[community %in% unique(groups_data_new$node_list$community)] else NULL
-      community_stats <- if ("community_stats" %in% names(groups_data) && !is.null(groups_data$community_stats)) groups_data$community_stats[community %in% unique(node_list$community)] else NULL
+      community_metrics <- if ("community_metrics" %in% names(groups_data) && !is.null(groups_data$community_metrics)) groups_data$community_metrics[community %in% unique(node_list$community)] else NULL
       filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
       params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
       
@@ -810,7 +810,7 @@ filter_groups_data <- function(groups_data,
     # Subset remaining objects
     groups_data_new$user_labels <- if ("user_labels" %in% names(groups_data) && !is.null(groups_data$user_labels)) groups_data$user_labels[account_id %in% groups_data_new$node_list$account_id] else NULL
     groups_data_new$community_labels <- if ("community_labels" %in% names(groups_data) && !is.null(groups_data$community_labels)) groups_data$community_labels[community %in% unique(groups_data_new$node_list$community)] else NULL
-    community_stats <- if ("community_stats" %in% names(groups_data) && !is.null(groups_data$community_stats)) groups_data$community_stats[community %in% unique(node_list$community)] else NULL
+    community_metrics <- if ("community_metrics" %in% names(groups_data) && !is.null(groups_data$community_metrics)) groups_data$community_metrics[community %in% unique(node_list$community)] else NULL
     filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
     params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
     

@@ -106,7 +106,10 @@ utils::globalVariables(c(".",
                          "account_last_post", 
                          "account_n_post", 
                          "is_within", 
-                         "sd"
+                         "sd", 
+                         "cluster_method",
+                         "n_comm",
+                         "resolution"
                          ))
 
 

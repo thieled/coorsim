@@ -56,6 +56,8 @@ Suggests:
     stringi,
     testthat (>= 3.0.0),
     tidygraph,
-    viridis
+    viridis,
+    xgboost,
+    mltools
 Config/testthat/edition: 3
 LazyData: true
