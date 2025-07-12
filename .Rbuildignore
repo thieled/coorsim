@@ -2,4 +2,3 @@
 ^\.Rproj\.user$
 ^README\.Rmd$
 ^data-raw$
-^inst/extdata/xgb_pairw_rank_twitter.xgb$
