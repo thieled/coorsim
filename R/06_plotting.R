@@ -535,15 +535,21 @@ plot_communities <- function(network_data,
   # Extract parameters and filter info
   get_caption <- function(x, label) {
     if (!label %in% names(network_data)) return("")
+    
     x <- network_data[[label]]
-    x <- x[!sapply(x, function(v) is.null(v) || is.na(v))]
+    
+    # remove NULL or entirely NA entries
+    x <- x[!sapply(x, function(v) is.null(v) || all(is.na(v)))]
+    
+    # format each value (handle vectors too)
     formatted <- mapply(function(nm, val) {
       if (is.numeric(val)) {
-        format(round(val, 2), trim = TRUE)
+        paste(format(round(val, 2), trim = TRUE), collapse = ", ")
       } else {
-        as.character(val)
+        paste(as.character(val), collapse = ", ")
       }
     }, nm = names(x), val = x, USE.NAMES = FALSE)
+    
     paste0(ucfirst(label), ": ", paste(names(x), formatted, sep = ": ", collapse = "; "), ".")
   }
   
