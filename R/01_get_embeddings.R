@@ -162,6 +162,8 @@ get_embeddings <- function(data,
 #' Necessary for Alibaba gte.
 #' @param chunk_size Integer. The number of observations per chunk when storing embeddings in the 
 #' HDF5 file. Defaults to `512L`.
+#' @param gzip_level Integer. gzip compression level (1-9) used when storing the HDF5 file. 1: Little compression, fast. 9: High compression, slow.
+#'  Default is NULL.
 #' @param h5_fileprefix Character. Prefix for the generated HDF5 filename. Defaults to `"embeddings_"`.
 #' @param save_dir Character. Directory where the HDF5 file will be saved. If `NULL`, defaults to the 
 #' working directory.
@@ -213,6 +215,7 @@ save_embeddings <- function(data,
                             use_fp16 = TRUE,
                             trust_remote_code = TRUE,
                             chunk_size = 512L,
+                            gzip_level = NULL,
                             
                             h5_fileprefix = "embeddings_",
                             save_dir = NULL,
@@ -324,7 +327,8 @@ save_embeddings <- function(data,
     name = "embeddings",
     robj = emb_matrix,
     chunk_dims = c(min(chunk_size, nrow(emb_matrix)), ncol(emb_matrix)),
-    dtype = hdf5r::h5types$H5T_NATIVE_DOUBLE
+    dtype = hdf5r::h5types$H5T_NATIVE_DOUBLE,
+    gzip_level = gzip_level
   )
   
   # Close the HDF5 file

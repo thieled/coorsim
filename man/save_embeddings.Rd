@@ -15,6 +15,7 @@ save_embeddings(
   use_fp16 = TRUE,
   trust_remote_code = TRUE,
   chunk_size = 512L,
+  gzip_level = NULL,
   h5_fileprefix = "embeddings_",
   save_dir = NULL,
   overwrite = TRUE,
@@ -56,6 +57,9 @@ Necessary for Alibaba gte.}
 
 \item{chunk_size}{Integer. The number of observations per chunk when storing embeddings in the 
 HDF5 file. Defaults to `512L`.}
+
+\item{gzip_level}{Integer. gzip compression level (1-9) used when storing the HDF5 file. 1: Little compression, fast. 9: High compression, slow.
+Default is NULL.}
 
 \item{h5_fileprefix}{Character. Prefix for the generated HDF5 filename. Defaults to `"embeddings_"`.}
 
