@@ -2,26 +2,20 @@
 % Please edit documentation in R/RcppExports.R
 \name{query_and_compute_similarities_tbb}
 \alias{query_and_compute_similarities_tbb}
-\title{Query Embeddings and Compute Cosine Similarities with TBB}
+\title{Query embeddings and compute cosine similarities (group-only, cached)}
 \usage{
 query_and_compute_similarities_tbb(m, post_id_lists, threshold)
 }
 \arguments{
-\item{m}{A NumericMatrix containing the embedding data with row names representing post IDs.}
+\item{m}{NumericMatrix with embeddings; rownames are post IDs.}
 
-\item{post_id_lists}{A List of CharacterVector objects, where each CharacterVector represents a set of post IDs to query in the embedding matrix.}
+\item{post_id_lists}{List of CharacterVector; each vector is one group.}
 
-\item{threshold}{A double value representing the threshold for cosine similarity. Only similarities above this threshold are included in the output.}
+\item{threshold}{double; only similarities strictly greater than this are returned.}
 }
 \value{
-A List of DataFrames. Each data frame contains three columns: "post_id" (the first post ID in the pair), "post_id_y" (the second post ID in the pair), and "similarity" (the cosine similarity between them).
+List of DataFrame (one per input group) with columns: post_id, post_id_y, similarity.
 }
 \description{
-This function takes a numeric matrix containing embeddings and a list of post ID lists.
-It performs two tasks sequentially to conserve memory:
-1. Queries the embeddings for each post ID list.
-2. Computes the cosine similarities between the first embedding and all other embeddings within each subset.
-}
-\details{
-The function returns a list of data frames where each data frame contains post ID pairs and their cosine similarities that exceed the given threshold.
+Query embeddings and compute cosine similarities (group-only, cached)
 }

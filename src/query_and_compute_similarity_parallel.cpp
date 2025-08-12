@@ -8,6 +8,7 @@ using namespace oneapi; // only Windows R 4.3.x or later
 
 #include <RcppArmadillo.h>
 #include <unordered_map>
+#include <mutex>
 
 using namespace Rcpp;
 
@@ -20,8 +21,9 @@ int num_threads = 1;
 
 //' Set number of threads
 //'
+//' @name set_num_threads
 //' @param threads Integer, setting the number of threads for parallel processing.
-//'
+//' @export
 // [[Rcpp::export]]
 void set_num_threads(int threads) {
   if (threads > 0) {
@@ -31,34 +33,45 @@ void set_num_threads(int threads) {
   }
 }
 
-//' Query Embeddings and Compute Cosine Similarities with TBB
+// Compact, symmetric key for a pair of row indices
+static inline uint64_t make_pair_key(uint32_t a, uint32_t b) {
+  uint32_t x = a < b ? a : b;
+  uint32_t y = a < b ? b : a;
+  return (static_cast<uint64_t>(x) << 32) | static_cast<uint64_t>(y);
+}
+
+//' Query embeddings and compute cosine similarities (group-only, cached)
 //'
-//' This function takes a numeric matrix containing embeddings and a list of post ID lists.
-//' It performs two tasks sequentially to conserve memory:
-//' 1. Queries the embeddings for each post ID list.
-//' 2. Computes the cosine similarities between the first embedding and all other embeddings within each subset.
-//'
-//' The function returns a list of data frames where each data frame contains post ID pairs and their cosine similarities that exceed the given threshold.
-//'
-//' @param m A NumericMatrix containing the embedding data with row names representing post IDs.
-//' @param post_id_lists A List of CharacterVector objects, where each CharacterVector represents a set of post IDs to query in the embedding matrix.
-//' @param threshold A double value representing the threshold for cosine similarity. Only similarities above this threshold are included in the output.
-//' @return A List of DataFrames. Each data frame contains three columns: "post_id" (the first post ID in the pair), "post_id_y" (the second post ID in the pair), and "similarity" (the cosine similarity between them).
+//' @name query_and_compute_similarities_tbb
+//' @param m NumericMatrix with embeddings; rownames are post IDs.
+//' @param post_id_lists List of CharacterVector; each vector is one group.
+//' @param threshold double; only similarities strictly greater than this are returned.
+//' @return List of DataFrame (one per input group) with columns: post_id, post_id_y, similarity.
 //' @export
 // [[Rcpp::export]]
-List query_and_compute_similarities_tbb(NumericMatrix m, List post_id_lists, double threshold) {
-   CharacterVector rownames_m = rownames(m);
-   std::unordered_map<std::string, int> rowname_map;
-   
-   // Map row names to their indices for quick lookup
-   for (int i = 0; i < rownames_m.size(); ++i) {
-     rowname_map[as<std::string>(rownames_m[i])] = i;
+List query_and_compute_similarities_tbb(NumericMatrix m,
+                                         List post_id_lists,
+                                         double threshold) {
+   // Map rownames -> row index (valid rows only)
+   CharacterVector rn = rownames(m);
+   std::unordered_map<std::string, uint32_t> row_index;
+   row_index.reserve(rn.size());
+   for (int i = 0; i < rn.size(); ++i) {
+     row_index.emplace(Rcpp::as<std::string>(rn[i]), static_cast<uint32_t>(i));
    }
+   
+   // Armadillo zero-copy view and precomputed L2 norms
+   arma::mat M(m.begin(), m.nrow(), m.ncol(), /*copy_aux_mem=*/false, /*strict=*/false);
+   arma::vec norms = arma::sqrt(arma::sum(arma::square(M), 1));
+   
+   // Thread-safe cache: pair -> cosine similarity (to avoid recomputation across groups)
+   std::unordered_map<uint64_t, double> cache;
+   cache.reserve(1024);
+   std::mutex cache_mtx;
    
    std::vector<DataFrame> result_list(post_id_lists.size());
    
 #ifdef TBB
-   // Set the number of threads for TBB
    tbb::task_arena arena(num_threads);
    arena.execute([&]() {
      tbb::parallel_for(0, static_cast<int>(post_id_lists.size()), [&](int i) {
@@ -66,64 +79,84 @@ List query_and_compute_similarities_tbb(NumericMatrix m, List post_id_lists, dou
        for (int i = 0; i < post_id_lists.size(); ++i) {
 #endif
          CharacterVector post_ids = post_id_lists[i];
-         NumericMatrix subset(post_ids.size(), m.ncol());
-         CharacterVector subset_rownames(post_ids.size());
          
-         // Query embeddings for the current list of post IDs
+         // Collect VALID indices and corresponding IDs for this group, preserving order
+         std::vector<uint32_t> idx; idx.reserve(post_ids.size());
+         std::vector<std::string> ids; ids.reserve(post_ids.size());
          for (int j = 0; j < post_ids.size(); ++j) {
-           std::string post_id = as<std::string>(post_ids[j]);
-           if (rowname_map.find(post_id) != rowname_map.end()) {
-             int index = rowname_map[post_id];
-             subset(j, _) = m(index, _);
-             subset_rownames[j] = post_ids[j];
+           std::string pid = Rcpp::as<std::string>(post_ids[j]);
+           auto it = row_index.find(pid);
+           if (it != row_index.end()) {
+             idx.push_back(it->second);
+             ids.push_back(std::move(pid));
            }
          }
          
-         subset.attr("dimnames") = List::create(subset_rownames, R_NilValue);
-         
-         // Calculate cosine similarities
-         arma::rowvec first_row(subset.ncol());
-         for (int k = 0; k < subset.ncol(); ++k) {
-           first_row[k] = subset(0, k);
+         // If fewer than 2 valid IDs, result is empty (same shape as original)
+         if (idx.size() <= 1) {
+           result_list[i] = DataFrame::create(
+             Named("post_id")    = CharacterVector(0),
+             Named("post_id_y")  = CharacterVector(0),
+             Named("similarity") = NumericVector(0)
+           );
+#ifdef TBB
+           return;
+#else
+           continue;
+#endif
          }
          
-         double norm_first_row = arma::norm(first_row, 2);
+         // Anchor = first valid ID in this group (same as row 0 of original subset)
+         uint32_t i0 = idx[0];
+         const arma::rowvec row0 = M.row(i0);
+         const double n0 = norms[i0];
          
-         std::vector<std::string> post_id;
-         std::vector<std::string> post_id_y;
-         std::vector<double> similarities;
+         std::vector<std::string> out_a; out_a.reserve(idx.size() - 1);
+         std::vector<std::string> out_b; out_b.reserve(idx.size() - 1);
+         std::vector<double>      out_s; out_s.reserve(idx.size() - 1);
          
-         for (int j = 1; j < subset.nrow(); ++j) {
-           arma::rowvec current_row(subset.ncol());
-           for (int k = 0; k < subset.ncol(); ++k) {
-             current_row[k] = subset(j, k);
+         for (size_t j = 1; j < idx.size(); ++j) {
+           uint32_t ij = idx[j];
+           const double nj = norms[ij];
+           if (n0 == 0.0 || nj == 0.0) continue;
+           
+           // Lookup or compute cosine for (i0, ij). We always EMIT for this group
+           // if it passes threshold; cache is purely to skip recomputation.
+           double sim;
+           uint64_t key = make_pair_key(i0, ij);
+           bool found = false;
+           
+           { // small critical section for lookup
+             std::lock_guard<std::mutex> lock(cache_mtx);
+             auto it = cache.find(key);
+             if (it != cache.end()) { sim = it->second; found = true; }
            }
            
-           double dot_product = arma::dot(first_row, current_row);
-           double norm_current_row = arma::norm(current_row, 2);
-           double cosine_similarity = dot_product / (norm_first_row * norm_current_row);
+           if (!found) {
+             sim = arma::dot(row0, M.row(ij)) / (n0 * nj);
+             std::lock_guard<std::mutex> lock(cache_mtx);
+             cache.emplace(key, sim);
+           }
            
-           if (cosine_similarity > threshold) {
-             post_id.push_back(as<std::string>(subset_rownames[0]));
-             post_id_y.push_back(as<std::string>(subset_rownames[j]));
-             similarities.push_back(cosine_similarity);
+           if (sim > threshold) {
+             out_a.push_back(ids[0]);   // group anchor ID
+             out_b.push_back(ids[j]);   // current ID
+             out_s.push_back(sim);
            }
          }
          
-         DataFrame result = DataFrame::create(
-           Named("post_id") = post_id,
-           Named("post_id_y") = post_id_y,
-           Named("similarity") = similarities
+         result_list[i] = DataFrame::create(
+           Named("post_id")    = out_a,
+           Named("post_id_y")  = out_b,
+           Named("similarity") = out_s
          );
          
-         result_list[i] = result;
-         
 #ifdef TBB
-       }); // End of parallel_for
-     }); // End of task_arena
+       }); // parallel_for
+     });   // arena
 #else
-   } // End of regular for loop
+   }     // for
 #endif
    
    return wrap(result_list);
- }
+}

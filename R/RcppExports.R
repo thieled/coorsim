@@ -21,25 +21,20 @@ query_and_compute_similarities <- function(m, post_id_lists, threshold) {
 
 #' Set number of threads
 #'
+#' @name set_num_threads
 #' @param threads Integer, setting the number of threads for parallel processing.
-#'
+#' @export
 set_num_threads <- function(threads) {
     invisible(.Call(`_coorsim_set_num_threads`, threads))
 }
 
-#' Query Embeddings and Compute Cosine Similarities with TBB
+#' Query embeddings and compute cosine similarities (group-only, cached)
 #'
-#' This function takes a numeric matrix containing embeddings and a list of post ID lists.
-#' It performs two tasks sequentially to conserve memory:
-#' 1. Queries the embeddings for each post ID list.
-#' 2. Computes the cosine similarities between the first embedding and all other embeddings within each subset.
-#'
-#' The function returns a list of data frames where each data frame contains post ID pairs and their cosine similarities that exceed the given threshold.
-#'
-#' @param m A NumericMatrix containing the embedding data with row names representing post IDs.
-#' @param post_id_lists A List of CharacterVector objects, where each CharacterVector represents a set of post IDs to query in the embedding matrix.
-#' @param threshold A double value representing the threshold for cosine similarity. Only similarities above this threshold are included in the output.
-#' @return A List of DataFrames. Each data frame contains three columns: "post_id" (the first post ID in the pair), "post_id_y" (the second post ID in the pair), and "similarity" (the cosine similarity between them).
+#' @name query_and_compute_similarities_tbb
+#' @param m NumericMatrix with embeddings; rownames are post IDs.
+#' @param post_id_lists List of CharacterVector; each vector is one group.
+#' @param threshold double; only similarities strictly greater than this are returned.
+#' @return List of DataFrame (one per input group) with columns: post_id, post_id_y, similarity.
 #' @export
 query_and_compute_similarities_tbb <- function(m, post_id_lists, threshold) {
     .Call(`_coorsim_query_and_compute_similarities_tbb`, m, post_id_lists, threshold)

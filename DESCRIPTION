@@ -1,7 +1,7 @@
 Package: coorsim
 Type: Package
 Title: Detects Coordinated Social Media Manipulation Based on Co-Similarity
-Version: 0.0.3.100
+Version: 0.0.4.000
 Date: 2024-10-11
 Authors@R: 
     person("Daniel", "Thiele", email="daniel.thiele@fu-berlin.de", role = c("cre", "aut"))
