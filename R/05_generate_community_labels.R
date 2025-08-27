@@ -142,9 +142,11 @@ sample_user_text <- function(groups_data,
   
   sampled_dt <- sampled_dt[account_id %in% selected_users$account_id]
   
+  post_cols <- c("content_clean", if (!is.null(post_vars)) paste0(post_vars, "_clean"))
+  
   out <- sampled_dt[
     , {
-      user_meta <- unique(.SD[, c("account_name_clean", "community", paste0(user_vars, "_clean")), with = FALSE])[1L]
+      user_meta <- unique(.SD[, c("account_name_clean", "community", if (!is.null(user_vars)) paste0(user_vars, "_clean")), with = FALSE])[1L]
       user_info <- if (!is.null(user_vars)) {
         short_names <- if (!is.null(user_vars_short)) user_vars_short else user_vars
         values <- unlist(user_meta[, paste0(user_vars, "_clean"), with = FALSE])
@@ -153,15 +155,17 @@ sample_user_text <- function(groups_data,
       } else ""
       
       post_lines <- apply(
-        .SD[, c("content_clean", paste0(post_vars, "_clean")), with = FALSE],
+        .SD[, post_cols, with = FALSE],
         1,
         function(row) {
-          if (length(post_vars) > 0) {
+          if (!is.null(post_vars) && length(post_vars) > 0) {
             short <- if (!is.null(post_vars_short)) post_vars_short else post_vars
             vals <- row[-1]
             non_empty <- !is.na(vals) & nzchar(vals)
             meta <- if (any(non_empty)) paste0(" [", paste(paste0(short[non_empty], ": ", vals[non_empty]), collapse = ", "), "]") else ""
-          } else meta <- ""
+          } else {
+            meta <- ""
+          }
           paste0(row[[1]], meta)
         }
       )
