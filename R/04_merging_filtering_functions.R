@@ -384,6 +384,9 @@ filter_groups_data <- function(groups_data,
       data.table::setnames(node_list, old = dup_account_cols, new = cleaned_names)
     }
     
+    # Ensure correct column order for igraph
+    node_list <- node_list[!duplicated(account_id)] |> dplyr::select(account_id, account_name, dplyr::everything())
+    
     # Step 5: Create the igraph object
     g <- igraph::graph_from_data_frame(d = edge_list, 
                                        vertices = node_list, 
