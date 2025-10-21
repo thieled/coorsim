@@ -518,9 +518,15 @@ examples <- list(example_user_text = example_user_text,
 schemata <- list(schema_user = schema_user,
                  schema_comm = schema_comm)
 
+# Recreate clean data
+unlink("data/prompts.rda")
+unlink("data/examples.rda")
+unlink("data/schemata.rda")
+
 ### Save them
 usethis::use_data(
   prompts, examples, schemata, 
   internal = FALSE, overwrite = TRUE, ascii = FALSE
 )
 
+devtools::document()
