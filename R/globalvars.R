@@ -117,7 +117,8 @@ utils::globalVariables(c(".",
                          "response_wname",
                          "..final_col_order",
                          "schema",
-                         "schema_comm"
+                         "schema_comm",
+                         "prompts"
                          ))
 
 
