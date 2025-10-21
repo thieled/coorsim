@@ -10,44 +10,63 @@ slice_community_text(
   min_chars = 20,
   max_chars = 500,
   min_share = NULL,
+  drop_fields = c("confidence", "emotion_valence"),
   verbose = TRUE,
   seed = 42
 )
 }
 \arguments{
-\item{groups_data}{A list that must include `user_labels`, typically created by `sample_user_text()`.}
+\item{groups_data}{A list that must include the element `user_labels`, typically
+created by [sample_user_text()]. This table must include at least the columns
+`community`, `user_share_comm`, `response`, and `account_name_clean`.}
 
-\item{max_n_per_slice}{Integer. Maximum number of user descriptions to include per text slice. Default is 10.}
+\item{max_n_per_slice}{Integer. Maximum number of user descriptions included
+per text slice (per community). Default is `10`.}
 
-\item{min_chars}{Integer. Minimum number of characters required for a user description. Default is 20.}
+\item{min_chars}{Integer. Minimum number of characters required in a user
+description to be retained. Default is `20`. *(Currently not enforced in filtering,
+but reserved for future use.)*}
 
-\item{max_chars}{Integer. Maximum number of characters to retain per user description (after cleaning). Default is 500.}
+\item{max_chars}{Integer. Maximum number of characters retained per description
+after cleaning. Default is `500`. *(Currently not applied in truncation, but included
+for consistency with [sample_user_text()].)*}
 
-\item{min_share}{Optional numeric. Minimum total `user_share_comm` per slice to retain the entry. Default is `NULL` (no filtering).}
+\item{min_share}{Optional numeric. Minimum cumulative `user_share_comm` required
+for a slice to be retained. Default is `NULL` (no filtering).}
 
-\item{verbose}{Logical. If `TRUE`, prints how many community slices will be returned. Default is `TRUE`.}
+\item{drop_fields}{Character vector of JSON fields to exclude from each user’s
+description (e.g., `"confidence"`, `"emotion_valence"`). Default is `c("confidence", "emotion_valence")`.}
 
-\item{seed}{Integer. Random seed for reproducibility. Default is 42.}
+\item{verbose}{Logical. If `TRUE`, prints the number of returned community slices.
+Default is `TRUE`.}
+
+\item{seed}{Integer. Random seed for reproducibility. Default is `42`.}
 }
 \value{
-A `data.table` with one row per community-slice, containing:
+A `data.table` with one row per community–slice combination containing:
 \itemize{
-  \item \code{community} – Community ID.
+  \item \code{community} – Community identifier.
   \item \code{slice} – Slice index within the community.
   \item \code{n} – Number of user descriptions included in the slice.
-  \item \code{sum_user_share_comm} – Cumulative posting share of included users.
-  \item \code{text_slice} – Concatenated and cleaned descriptions for LLM input.
+  \item \code{sum_user_share_comm} – Sum of user shares within the slice.
+  \item \code{text_slice} – JSON-formatted string of concatenated user descriptions,
+        including user names and excluding dropped fields.
 }
 }
 \description{
-This function prepares community-level text slices for annotation by aggregating user descriptions 
-sampled via `sample_user_text()`. It cleans and truncates descriptions, filters out short or low-coverage 
-entries, and creates slice-level summaries by grouping top users in each community.
+This function prepares community-level text slices for LLM-based labeling by
+aggregating user-level descriptions sampled via [sample_user_text()]. It cleans,
+truncates, and filters user descriptions, inserts the user's name into the JSON
+structure, and aggregates the resulting JSON objects into compact community-level
+text slices for annotation.
 }
 \details{
-This function is intended to generate concise, representative community-level summaries 
-from user-level metadata before labeling with LLMs. Descriptions are truncated and sanitized to ensure compatibility.
+This function aggregates user-level JSON outputs (e.g., from local LLM-based
+annotations) into structured, slice-level JSON documents suitable for community
+labeling. It automatically embeds user names into the JSON under `"name"`, and
+drops unwanted fields defined in `drop_fields`. Each slice corresponds to the
+top `max_n_per_slice` users within a community, ranked by `user_share_comm`.
 }
 \seealso{
-[sample_user_text()], [label_communities()], [stringr::str_trunc()]
+[sample_user_text()], [label_communities()], [jsonlite::toJSON()], [stringr::str_replace()]
 }

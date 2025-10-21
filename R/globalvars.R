@@ -109,7 +109,16 @@ utils::globalVariables(c(".",
                          "sd", 
                          "cluster_method",
                          "n_comm",
-                         "resolution"
+                         "resolution",
+                         "named_entities",
+                         "repetitive_patterns",
+                         "schemata",
+                         "topic",
+                         "prompts",
+                         "response_wname",
+                         "..final_col_order",
+                         "schema",
+                         "schema_comm"
                          ))
 
 

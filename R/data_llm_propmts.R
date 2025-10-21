@@ -9,7 +9,7 @@
 #'   \item{prompt_comm}{Instruction for generating a community label and description in JSON.}
 #'   \item{system_user}{System message instructing how to interpret individual user text.}
 #'   \item{system_comm}{System message for generating a label and summary from community-level descriptions.}
-#'   \item{system_comm_agg}{System message for summarizing community slices by share.}
+#'   \item{system_comm_slices}{System message for summarizing community slices by share.}
 #' }
 #'
 #' @section Examples (`examples`):
@@ -21,6 +21,12 @@
 #'   \item{example_comm_slices_text}{Pre-labeled community slices with share info.}
 #'   \item{example_comm_slices_answer}{Expected output for slice aggregation.}
 #' }
+#' 
+#' @section Schemata (`schemata`):
+#' \describe{
+#'   \item{schema_user}{JSON-schema for LLM-output to describe users.}
+#'   \item{schema_comm}{JSON-schema for LLM-output to describe communities.}
+#' }
 #'
 #' @format Lists of character vectors.
 #' @encoding UTF-8
@@ -31,3 +37,6 @@
 
 #' @rdname prompt_data
 "examples"
+
+#' @rdname prompt_data
+"schemata"

@@ -6,16 +6,21 @@
 \alias{prompt_data}
 \alias{prompts}
 \alias{examples}
+\alias{schemata}
 \title{Prompt and example data for LLM community annotation}
 \format{
 Lists of character vectors.
 
 An object of class \code{list} of length 6.
+
+An object of class \code{list} of length 2.
 }
 \usage{
 prompts
 
 examples
+
+schemata
 }
 \description{
 These objects bundle prompt templates and few-shot examples used for guiding large language models (LLMs) in the `coorsim` package.
@@ -28,7 +33,7 @@ All examples are anonymized and rewritten using GPT-4o to standardize tone and p
   \item{prompt_comm}{Instruction for generating a community label and description in JSON.}
   \item{system_user}{System message instructing how to interpret individual user text.}
   \item{system_comm}{System message for generating a label and summary from community-level descriptions.}
-  \item{system_comm_agg}{System message for summarizing community slices by share.}
+  \item{system_comm_slices}{System message for summarizing community slices by share.}
 }
 }
 
@@ -41,6 +46,14 @@ All examples are anonymized and rewritten using GPT-4o to standardize tone and p
   \item{example_comm_answer}{Expected output: community label and description.}
   \item{example_comm_slices_text}{Pre-labeled community slices with share info.}
   \item{example_comm_slices_answer}{Expected output for slice aggregation.}
+}
+}
+
+\section{Schemata (`schemata`)}{
+
+\describe{
+  \item{schema_user}{JSON-schema for LLM-output to describe users.}
+  \item{schema_comm}{JSON-schema for LLM-output to describe communities.}
 }
 }
 
