@@ -2,14 +2,14 @@
 % Please edit documentation in R/05_generate_community_labels.R
 \name{sample_user_text}
 \alias{sample_user_text}
-\title{Sample and format user posts for classification or labeling tasks}
+\title{Sample and format user posts for labeling (JSON string)}
 \usage{
 sample_user_text(
   groups_data,
   user_vars = NULL,
-  user_vars_short = NULL,
+  user_vars_rename = NULL,
   post_vars = NULL,
-  post_vars_short = NULL,
+  post_vars_rename = NULL,
   min_chars = 1,
   max_chars = 1000,
   clean_name = TRUE,
@@ -24,54 +24,58 @@ sample_user_text(
 )
 }
 \arguments{
-\item{groups_data}{A named list containing `post_data` and `node_list`, both of which must be `data.table` objects.}
+\item{groups_data}{Named list with \code{post_data} and \code{node_list} (both \code{data.table}).
+\code{post_data} must contain: \code{post_id}, \code{account_id}, \code{account_name}, \code{content}, \code{community}.}
 
-\item{user_vars}{Character vector of user-level variables to include (in addition to `account_name`).}
+\item{user_vars}{Character vector of user-level columns to include (besides user name). Default \code{NULL}.}
 
-\item{user_vars_short}{Optional character vector with short labels corresponding to `user_vars` for display.}
+\item{user_vars_rename}{Named character vector mapping JSON field names to existing user columns.
+If \code{NULL}, names in \code{user_vars} are used as JSON names. Default \code{NULL}.}
 
-\item{post_vars}{Character vector of post-level variables to include (in addition to `content`).}
+\item{post_vars}{Character vector of post-level columns to include per post (besides content). Default \code{NULL}.}
 
-\item{post_vars_short}{Optional character vector with short labels corresponding to `post_vars` for display.}
+\item{post_vars_rename}{Named character vector mapping JSON field names to existing post columns.
+If \code{NULL}, names in \code{post_vars} are used as JSON names. Default \code{NULL}.}
 
-\item{min_chars}{Minimum number of characters required for post content (after cleaning). Default is 20.}
+\item{min_chars}{Minimum characters required for a cleaned post content to be eligible. Default \code{1}.}
 
-\item{max_chars}{Maximum number of characters for cleaned content or metadata fields. Default is 250.}
+\item{max_chars}{Maximum characters for truncating all cleaned character fields. Use \code{NULL} for no truncation. Default \code{1000}.}
 
-\item{clean_name}{Logical. If `TRUE`, clean `account_name` to remove noise and truncate length. Default is `TRUE`.}
+\item{clean_name}{If \code{TRUE}, clean and truncate \code{account_name} before use as user name. Default \code{TRUE}.}
 
-\item{min_n_posts}{Minimum number of posts per user to be included. Default is 2.}
+\item{min_n_posts}{Minimum number of posts to sample per user. Default \code{1}.}
 
-\item{max_n_posts}{Maximum number of posts per user to be included. Default is 10.}
+\item{max_n_posts}{Maximum number of posts to sample per user. Default \code{30}.}
 
-\item{sampling_ratio_posts}{Proportion of posts to sample per user. Default is 0.25.}
+\item{sampling_ratio_posts}{Proportion of available posts to sample per user before bounding by min/max. Default \code{0.5}.}
 
-\item{min_n_users}{Minimum number of users to sample per community. Default is 2.}
+\item{min_n_users}{Minimum number of users to sample per community; communities below this are dropped. Default \code{1}.}
 
-\item{max_n_users}{Maximum number of users to sample per community. Default is 10.}
+\item{max_n_users}{Maximum number of users to sample per community. Default \code{30}.}
 
-\item{sampling_ratio_users}{Proportion of users to sample per community. Default is 0.25.}
+\item{sampling_ratio_users}{Proportion of eligible users to sample per community before bounding by min/max. Default \code{0.5}.}
 
-\item{strat_sample}{Logical. If `TRUE`, performs stratified sampling of users by post volume within community. 
-If `FALSE`, selects most active users. Default is `TRUE`.}
+\item{strat_sample}{If \code{TRUE}, sample users within community with probability proportional to post count; if \code{FALSE}, pick most active. Default \code{TRUE}.}
 
-\item{seed}{Integer seed for reproducible sampling. Default is 42.}
+\item{seed}{Integer seed for reproducibility. Default \code{42}.}
 }
 \value{
-A list identical to `groups_data` with an added `user_labels` element. 
-  This element is a `data.table` containing:
+The input \code{groups_data} with an added \code{user_labels} \code{data.table}
+  (one row per sampled \code{account_id}) with columns:
   \itemize{
-    \item \code{community}: Community identifier.
-    \item \code{account_name_clean}: Cleaned display name.
-    \item \code{text}: A markdown-style string combining the user's posts and metadata.
-    \item \code{sampled_post_ids}: List column of sampled post IDs.
-    \item \code{approx_tokens}: Approximate token count (assuming 1.3x whitespace word count).
-    \item \code{user_share_comm}: Relative posting activity of the user in their community.
+    \item \code{account_id}, \code{community}
+    \item \code{account_name_clean} (used as user name)
+    \item \code{text} (compact JSON-style character string with user fields and a list of posts)
+    \item \code{sampled_post_ids} (list column)
+    \item \code{approx_tokens} (approximate token count)
+    \item \code{user_share_comm} (user's posting share in community)
   }
 }
 \description{
-This function samples posts from social media users based on customizable constraints 
-and formats them into a markdown-style text block suitable for input to classification 
-or labeling models. It supports inclusion of user-level and post-level metadata, 
-optional name cleaning, and stratified or top-down user sampling per community.
+Samples posts per user and returns a compact JSON-style character string per user.
+Character fields are cleaned and truncated to \code{max_chars}. Empty fields are omitted.
+}
+\details{
+All character fields in \code{user_vars} and \code{post_vars} are cleaned and truncated
+  before inclusion. Fields that are \code{NA} or empty after cleaning are omitted from the JSON string.
 }

@@ -31,27 +31,48 @@ Use ### EXAMPLES ### only to understand the output format, but ignore its conten
 # Examples - Users
 example_user_text <- c(
   
-  paste0(
-  "@brit_voice92: Nigel #Farage2024 is the only one standing up for real British values. 💜 Time to take our country back. |",
-  " Sick of the open border madness — UKIP speaks for the people. #Farage2024 💜💜 | Fuck EU! No to woke politics. Yes to UKIP! 💜 #Farage2024"
-  ),
+  # Example 1: British nationalist user
+  jsonlite::toJSON(list(
+    user_name = "brit_voice92",
+    posts = list(
+      list(content = "Nigel #Farage2024 is the only one standing up for real British values. 💜 Time to take our country back."),
+      list(content = "Sick of the open border madness — UKIP speaks for the people. #Farage2024 💜💜"),
+      list(content = "Fuck EU! No to woke politics. Yes to UKIP! 💜 #Farage2024")
+    )
+  ), auto_unbox = TRUE, pretty = FALSE),
   
-  paste0(
-    "@EUinsight: Between 6 and 9 June 2024, around 373 million Europeans were eligible to elect the 720 members of the new European Parliament. ",
-    "Preliminary results show voter turnout at roughly 51 percent — the highest participation rate in twenty years.#EPelections2024 #EU #EuropeVotes |",
-    "Across the EU, conservative and far-right parties made notable gains, while centrist and green groups lost seats in several member states. ",
-    "These shifts could influence the appointment of the next European Commission and the future direction of EU policy. #EPelections2024 #EuropeVotes #EU"
-    ),
+  # Example 2: European politics news account
+  jsonlite::toJSON(list(
+    user_name = "EUinsight",
+    posts = list(
+      list(content = "Between 6 and 9 June 2024, around 373 million Europeans were eligible to elect the 720 members of the new European Parliament."),
+      list(content = "Preliminary results show voter turnout at roughly 51 percent — the highest participation rate in twenty years. #EPelections2024 #EU #EuropeVotes"),
+      list(content = "Across the EU, conservative and far-right parties made notable gains, while centrist and green groups lost seats in several member states."),
+      list(content = "These shifts could influence the appointment of the next European Commission and the future direction of EU policy. #EPelections2024 #EuropeVotes #EU")
+    )
+  ), auto_unbox = TRUE, pretty = FALSE),
   
-  paste0(
-    "@denker_für_frieden: Nur Wagenknecht spricht sich mutig gegen den Krieg aus! 🇩🇪🤝🇷🇺 | ",
-    "Wir brauchen Frieden, nicht Panzer – Freundschaft mit Russland statt Eskalation! 🇷🇺🇩🇪 | ",
-    "Niemand außer Wagenknecht fordert einen echten diplomatischen Weg zur Beendigung des Ukraine-Kriegs. ✌️"
-  ),
+  # Example 3: German pro-Russia peace activist
+  jsonlite::toJSON(list(
+    user_name = "denker_fuer_frieden",
+    posts = list(
+      list(content = "Nur Wagenknecht spricht sich mutig gegen den Krieg aus! 🇩🇪🤝🇷🇺"),
+      list(content = "Wir brauchen Frieden, nicht Panzer – Freundschaft mit Russland statt Eskalation! 🇷🇺🇩🇪"),
+      list(content = "Niemand außer Wagenknecht fordert einen echten diplomatischen Weg zur Beendigung des Ukraine-Kriegs. ✌️")
+    )
+  ), auto_unbox = TRUE, pretty = FALSE),
   
-  
-  "@mr_niceguy: 😂😂😂 | 😂😂😂 | 😂😂😂"
+  # Example 4: Humorous / low-effort user
+  jsonlite::toJSON(list(
+    user_name = "mr_niceguy",
+    posts = list(
+      list(content = "😂😂😂"),
+      list(content = "😂😂😂"),
+      list(content = "😂😂😂")
+    )
+  ), auto_unbox = TRUE, pretty = FALSE)
 )
+
 
 # Answers - Users
 example_user_answer <- c(

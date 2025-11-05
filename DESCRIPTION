@@ -1,11 +1,11 @@
 Package: coorsim
 Type: Package
-Title: Detects Coordinated Social Media Manipulation Based on Co-Similarity
-Version: 0.0.5.000
+Title: Detects Coordinated Posting Behavior Based on Co-Similarity
+Version: 0.0.6.000
 Date: 2024-10-11
 Authors@R: 
-    person("Daniel", "Thiele", email="daniel.thiele@fu-berlin.de", role = c("cre", "aut"))
-Description: R package for detection of coordinated behavior and coordinated social media manipulation (CSMM) (Thiele et al. 2025). 
+    person("Thiele", "Daniel", email="daniel.thiele@fu-berlin.de", role = c("cre", "aut"))
+Description: R package for detection of coordinated behavior and coordinated social media manipulation. 
     Detects groups of accounts that post semantically similar content within short time frames, by comparing cosine similarities of post embeddings. 
     Provides a comprehensive set of functions to generate embeddings (via reticulate, pytorch), to efficiently compute co-similarities (via C++ and tbb),
     to detect coordinated communites, automatically label communities with locally hosted LLMs (via ollama), and to plot results.

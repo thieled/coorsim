@@ -1,46 +1,48 @@
-
-#' Sample and format user posts for classification or labeling tasks
+#' Sample and format user posts for labeling (JSON string)
 #'
-#' This function samples posts from social media users based on customizable constraints 
-#' and formats them into a markdown-style text block suitable for input to classification 
-#' or labeling models. It supports inclusion of user-level and post-level metadata, 
-#' optional name cleaning, and stratified or top-down user sampling per community.
+#' Samples posts per user and returns a compact JSON-style character string per user.
+#' Character fields are cleaned and truncated to \code{max_chars}. Empty fields are omitted.
 #'
-#' @param groups_data A named list containing `post_data` and `node_list`, both of which must be `data.table` objects.
-#' @param user_vars Character vector of user-level variables to include (in addition to `account_name`).
-#' @param user_vars_short Optional character vector with short labels corresponding to `user_vars` for display.
-#' @param post_vars Character vector of post-level variables to include (in addition to `content`).
-#' @param post_vars_short Optional character vector with short labels corresponding to `post_vars` for display.
-#' @param min_chars Minimum number of characters required for post content (after cleaning). Default is 20.
-#' @param max_chars Maximum number of characters for cleaned content or metadata fields. Default is 250.
-#' @param clean_name Logical. If `TRUE`, clean `account_name` to remove noise and truncate length. Default is `TRUE`.
-#' @param min_n_posts Minimum number of posts per user to be included. Default is 2.
-#' @param max_n_posts Maximum number of posts per user to be included. Default is 10.
-#' @param sampling_ratio_posts Proportion of posts to sample per user. Default is 0.25.
-#' @param min_n_users Minimum number of users to sample per community. Default is 2.
-#' @param max_n_users Maximum number of users to sample per community. Default is 10.
-#' @param sampling_ratio_users Proportion of users to sample per community. Default is 0.25.
-#' @param strat_sample Logical. If `TRUE`, performs stratified sampling of users by post volume within community. 
-#'   If `FALSE`, selects most active users. Default is `TRUE`.
-#' @param seed Integer seed for reproducible sampling. Default is 42.
+#' @param groups_data Named list with \code{post_data} and \code{node_list} (both \code{data.table}).
+#'   \code{post_data} must contain: \code{post_id}, \code{account_id}, \code{account_name}, \code{content}, \code{community}.
+#' @param user_vars Character vector of user-level columns to include (besides user name). Default \code{NULL}.
+#' @param user_vars_rename Named character vector mapping JSON field names to existing user columns.
+#'   If \code{NULL}, names in \code{user_vars} are used as JSON names. Default \code{NULL}.
+#' @param post_vars Character vector of post-level columns to include per post (besides content). Default \code{NULL}.
+#' @param post_vars_rename Named character vector mapping JSON field names to existing post columns.
+#'   If \code{NULL}, names in \code{post_vars} are used as JSON names. Default \code{NULL}.
+#' @param min_chars Minimum characters required for a cleaned post content to be eligible. Default \code{1}.
+#' @param max_chars Maximum characters for truncating all cleaned character fields. Use \code{NULL} for no truncation. Default \code{1000}.
+#' @param clean_name If \code{TRUE}, clean and truncate \code{account_name} before use as user name. Default \code{TRUE}.
+#' @param min_n_posts Minimum number of posts to sample per user. Default \code{1}.
+#' @param max_n_posts Maximum number of posts to sample per user. Default \code{30}.
+#' @param sampling_ratio_posts Proportion of available posts to sample per user before bounding by min/max. Default \code{0.5}.
+#' @param min_n_users Minimum number of users to sample per community; communities below this are dropped. Default \code{1}.
+#' @param max_n_users Maximum number of users to sample per community. Default \code{30}.
+#' @param sampling_ratio_users Proportion of eligible users to sample per community before bounding by min/max. Default \code{0.5}.
+#' @param strat_sample If \code{TRUE}, sample users within community with probability proportional to post count; if \code{FALSE}, pick most active. Default \code{TRUE}.
+#' @param seed Integer seed for reproducibility. Default \code{42}.
 #'
-#' @return A list identical to `groups_data` with an added `user_labels` element. 
-#'   This element is a `data.table` containing:
+#' @return The input \code{groups_data} with an added \code{user_labels} \code{data.table}
+#'   (one row per sampled \code{account_id}) with columns:
 #'   \itemize{
-#'     \item \code{community}: Community identifier.
-#'     \item \code{account_name_clean}: Cleaned display name.
-#'     \item \code{text}: A markdown-style string combining the user's posts and metadata.
-#'     \item \code{sampled_post_ids}: List column of sampled post IDs.
-#'     \item \code{approx_tokens}: Approximate token count (assuming 1.3x whitespace word count).
-#'     \item \code{user_share_comm}: Relative posting activity of the user in their community.
+#'     \item \code{account_id}, \code{community}
+#'     \item \code{account_name_clean} (used as user name)
+#'     \item \code{text} (compact JSON-style character string with user fields and a list of posts)
+#'     \item \code{sampled_post_ids} (list column)
+#'     \item \code{approx_tokens} (approximate token count)
+#'     \item \code{user_share_comm} (user's posting share in community)
 #'   }
+#'
+#' @details All character fields in \code{user_vars} and \code{post_vars} are cleaned and truncated
+#'   before inclusion. Fields that are \code{NA} or empty after cleaning are omitted from the JSON string.
 #'
 #' @export
 sample_user_text <- function(groups_data,
                              user_vars = NULL,
-                             user_vars_short = NULL,
+                             user_vars_rename = NULL,
                              post_vars = NULL,
-                             post_vars_short = NULL,
+                             post_vars_rename = NULL,
                              min_chars = 1,
                              max_chars = 1000,
                              clean_name = TRUE,
@@ -67,8 +69,11 @@ sample_user_text <- function(groups_data,
     stop("Missing required variables in post_data: ", paste(setdiff(all_vars, names(post_data)), collapse = ", "))
   }
   
-  clean_text <- function(text, min_chars) {
-    text |>
+  if(is.null(max_chars)) max_chars = Inf
+  
+  clean_text <- function(x, max_chars) {
+    if (!is.character(x)) x <- as.character(x)
+    x |>
       stringr::str_replace_all("([[:punct:]])\\1{1,}", "\\1") |>
       stringr::str_remove_all("\\b[a-fA-F0-9]{32,}\\b") |>
       stringr::str_replace_all("[\\r\\n\\t]+", " ") |>
@@ -76,36 +81,47 @@ sample_user_text <- function(groups_data,
       stringr::str_trunc(width = max_chars, ellipsis = "..")
   }
   
-  post_data[, content_clean := clean_text(content, max_chars)]
+  # clean main content
+  post_data[, content_clean := clean_text(content, max_chars = max_chars)]
   
+  # clean user vars
   if (!is.null(user_vars)) {
-    for (var in user_vars) {
-      data.table::set(post_data, j = paste0(var, "_clean"), value = clean_text(post_data[[var]], max_chars))
+    for (v in user_vars) {
+      post_data[[paste0(v, "_clean")]] <- clean_text(post_data[[v]], max_chars = max_chars)
     }
   }
   
+  # clean post vars
   if (!is.null(post_vars)) {
-    for (var in post_vars) {
-      data.table::set(post_data, j = paste0(var, "_clean"), value = clean_text(post_data[[var]], max_chars))
+    for (v in post_vars) {
+      post_data[[paste0(v, "_clean")]] <- clean_text(post_data[[v]], max_chars = max_chars)
     }
   }
   
+  # clean account name safely (no copy warning)
+  # remove if exists
   if ("account_name_clean" %in% names(post_data)) {
-    post_data[, "account_name_clean" := NULL]
+    post_data[, account_name_clean := NULL]
   }
-  data.table::set(
-    post_data,
-    j = "account_name_clean",
-    value = if (clean_name) clean_text(post_data$account_name, max_chars) else post_data$account_name
-  )
   
-  # Calculate user shares
+  # create clean copy first to avoid shallow-copy metadata
+  post_data <- data.table::copy(post_data)
+  
+  # assign by reference safely
+  post_data[, account_name_clean := if (clean_name) {
+    clean_text(account_name, max_chars = max_chars)
+  } else {
+    account_name
+  }]
+  
+  # calculate user share within community
   user_shares <- post_data[, .N, by = .(community, account_id)][
     , user_share_comm := N / sum(N), by = community
   ][, .(community, account_id, user_share_comm)]
   
   post_data <- post_data[nchar(content_clean) >= min_chars]
   
+  # sample posts per user
   sampled_dt <- post_data[
     , {
       n_total <- .N
@@ -122,7 +138,6 @@ sample_user_text <- function(groups_data,
   eligible_communities <- user_comm_map[
     , .(n_users = data.table::uniqueN(account_id)), by = community
   ][n_users >= min_n_users, community]
-  
   sampled_dt <- sampled_dt[community %in% eligible_communities]
   
   user_stats <- sampled_dt[, .N, by = .(account_id, community)]
@@ -142,56 +157,72 @@ sample_user_text <- function(groups_data,
   
   sampled_dt <- sampled_dt[account_id %in% selected_users$account_id]
   
-  post_cols <- c("content_clean", if (!is.null(post_vars)) paste0(post_vars, "_clean"))
+  # rename logic
+  if (!is.null(user_vars_rename)) {
+    user_map <- user_vars_rename
+  } else {
+    user_map <- stats::setNames(user_vars, user_vars)
+  }
+  if (!is.null(post_vars_rename)) {
+    post_map <- post_vars_rename
+  } else {
+    post_map <- stats::setNames(post_vars, post_vars)
+  }
   
   out <- sampled_dt[
     , {
-      user_meta <- unique(.SD[, c("account_name_clean", "community", if (!is.null(user_vars)) paste0(user_vars, "_clean")), with = FALSE])[1L]
-      user_info <- if (!is.null(user_vars)) {
-        short_names <- if (!is.null(user_vars_short)) user_vars_short else user_vars
-        values <- unlist(user_meta[, paste0(user_vars, "_clean"), with = FALSE])
-        non_empty <- !is.na(values) & nzchar(values)
-        if (any(non_empty)) paste0("[", paste(paste0(short_names[non_empty], ": ", values[non_empty]), collapse = ", "), "]") else ""
-      } else ""
+      # construct the list of columns to extract safely
+      user_cols <- c("account_name_clean", "community")
+      if (!is.null(user_vars)) user_cols <- c(user_cols, paste0(user_vars, "_clean"))
       
-      post_lines <- apply(
-        .SD[, post_cols, with = FALSE],
-        1,
-        function(row) {
-          if (!is.null(post_vars) && length(post_vars) > 0) {
-            short <- if (!is.null(post_vars_short)) post_vars_short else post_vars
-            vals <- row[-1]
-            non_empty <- !is.na(vals) & nzchar(vals)
-            meta <- if (any(non_empty)) paste0(" [", paste(paste0(short[non_empty], ": ", vals[non_empty]), collapse = ", "), "]") else ""
-          } else {
-            meta <- ""
-          }
-          paste0(row[[1]], meta)
+      # extract user metadata safely (no .. lookup!)
+      user_meta <- unique(.SD[, user_cols, with = FALSE])[1L]
+      
+      # build user JSON object
+      json_user <- list()
+      json_user$user_name <- user_meta$account_name_clean
+      
+      if (!is.null(user_vars)) {
+        for (nm in names(user_map)) {
+          val <- user_meta[[paste0(user_map[[nm]], "_clean")]]
+          if (!is.null(val) && !is.na(val) && nzchar(val)) json_user[[nm]] <- val
         }
-      )
+      }
       
-      md <- paste0(user_meta$account_name_clean,
-                   if (nchar(user_info) > 0) paste0(" ", user_info),
-                   ": ", paste(post_lines, collapse = " | "))
+      # build posts array safely
+      posts <- list()
+      for (i in seq_len(.N)) {
+        p <- list(content = .SD$content_clean[i])
+        if (!is.null(post_vars)) {
+          for (nm in names(post_map)) {
+            val <- .SD[[paste0(post_map[[nm]], "_clean")]][i]
+            if (!is.null(val) && !is.na(val) && nzchar(val)) p[[nm]] <- val
+          }
+        }
+        if (nzchar(p$content)) posts[[length(posts) + 1L]] <- p
+      }
+      json_user$posts <- posts
+      
+      json_str <- jsonlite::toJSON(json_user, auto_unbox = TRUE, null = "null", pretty = FALSE)
       
       list(
         community = user_meta$community,
         account_name_clean = user_meta$account_name_clean,
-        text = md,
+        text = json_str,
         sampled_post_ids = list(.SD$post_id),
-        approx_tokens = as.integer(round(length(strsplit(md, "\\s+")[[1]]) * 1.3))
+        approx_tokens = as.integer(round(length(strsplit(json_str, "\\s+")[[1]]) * 1.3))
       )
     },
     by = account_id
   ]
   
-  out <- merge(out, user_shares[, community := NULL], by = "account_id", all.x = T)
   
+  out <- merge(out, user_shares[, community := NULL], by = "account_id", all.x = TRUE)
   data.table::setorder(out, community, -user_share_comm)
-  
   groups_data$user_labels <- out
   return(groups_data)
 }
+
 
 
 
