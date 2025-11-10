@@ -8,6 +8,7 @@ filter_groups_data(
   groups_data,
   by_col = NULL,
   by_val = NULL,
+  by_condition = "equal",
   edge_weight = NULL,
   time_window = NULL,
   min_simil = NULL,
@@ -35,6 +36,9 @@ filter_groups_data(
 \item{by_col}{Column name in `post_data` to filter by (e.g. `"lang"`, `"country"`).}
 
 \item{by_val}{Value(s) to keep in `by_col`.}
+
+\item{by_condition}{Condition to compare values in `by_col` to the values in `by_val`. Options: 'equal', 'greater'. 'smaller'
+Default is 'equal'.}
 
 \item{edge_weight}{Minimum edge weight to retain in the similarity network.}
 

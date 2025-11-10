@@ -89,12 +89,21 @@ augment_groups_data <- function(
     }
   }
   
-  # Add prefix to user columns (except account_id), but only if not already prefixed   <<<<< Changed 2025-07-03
+  # Add prefix to user columns (except account_id), but only if not already prefixed   <<<<< Changed 2025-11-10
   user_cols_to_keep <- c("account_id", other_user_vars)
   users <- users[, intersect(user_cols_to_keep, names(users)), with = FALSE]
+  
   user_cols <- setdiff(names(users), "account_id")
-  user_cols_renamed <- ifelse(startsWith(user_cols, "account_"), user_cols, paste0("account_", user_cols))
-  data.table::setnames(users, user_cols, user_cols_renamed)
+  
+  # Only rename if there are columns to rename
+  if (length(user_cols) > 0L) {
+    # ensure character result even for length-0 safety
+    user_cols_renamed <- ifelse(startsWith(user_cols, "account_"),
+                                user_cols,
+                                paste0("account_", user_cols))
+    user_cols_renamed <- as.character(user_cols_renamed)
+    data.table::setnames(users, user_cols, user_cols_renamed)
+  }
   
   ### De-duplicating users ###
   if (any(duplicated(users[["account_id"]]))) {
@@ -226,6 +235,8 @@ augment_groups_data <- function(
 #' @param groups_data A list returned by `coorsim_detect_groups()` or `augment_groups_data()`.
 #' @param by_col Column name in `post_data` to filter by (e.g. `"lang"`, `"country"`).
 #' @param by_val Value(s) to keep in `by_col`.
+#' @param by_condition Condition to compare values in `by_col` to the values in `by_val`. Options: 'equal', 'greater'. 'smaller'
+#' Default is 'equal'.
 #' @param edge_weight Minimum edge weight to retain in the similarity network.
 #' @param time_window Maximum time difference allowed between posts (in seconds).
 #' @param min_simil Minimum cosine similarity allowed between post embeddings.
@@ -254,6 +265,7 @@ augment_groups_data <- function(
 filter_groups_data <- function(groups_data,
                                by_col = NULL,
                                by_val = NULL,
+                               by_condition = "equal",
                                edge_weight = NULL,
                                time_window = NULL,
                                min_simil = NULL,
@@ -318,11 +330,13 @@ filter_groups_data <- function(groups_data,
     return(result)
   }
   
-  # Filter by post_data column
+  ### Filter by post_data column
   if (!is.null(by_col)) {
     if (!"sim_dt" %in% names(groups_data)) stop("No 'sim_dt' found. Filtering 'by' not possible.")
-    if (!"post_data" %in% names(groups_data)) stop("No 'sim_dt' found. Filtering 'by' not possible.")
-    if (is.null("by_val")) stop("No 'by_val' specified. Please specify a value.")
+    if (!"post_data" %in% names(groups_data)) stop("No 'post_data' found. Filtering 'by' not possible.")
+    if (is.null(by_val)) stop("No 'by_val' specified. Please specify a value.")
+    
+    by_condition <- match.arg(by_condition, c("equal", "greater", "smaller"), several.ok = FALSE)
     
     post_data <- data.table::copy(groups_data$post_data)
     sim_dt <- data.table::copy(groups_data$sim_dt)
@@ -332,7 +346,7 @@ filter_groups_data <- function(groups_data,
     other_user_vars <- setdiff(names(user_data), c("account_id", "account_name"))
     return_post_dt <- "post_data" %in% names(groups_data)
     
-    # Clean up duplicated "account_" prefixes in node_list
+    # Clean up duplicated "account_" prefixes
     node_cols <- names(node_list)
     dup_account_cols <- grep("^account_account_", node_cols, value = TRUE)
     cleaned_names <- sub("^account_account_", "account_", dup_account_cols)
@@ -340,90 +354,104 @@ filter_groups_data <- function(groups_data,
       data.table::setnames(node_list, old = dup_account_cols, new = cleaned_names)
     }
     
-    if (verbose) cli::cli_inform("Filtering by {by_col} = {by_val}.")
+    if (verbose) cli::cli_inform("Filtering by {by_col} ({by_condition}) with value {by_val}.")
     
-    # Filtering: Step 1: post_data
+    # Validate column presence
     if (!by_col %in% names(post_data)) {
       stop("Column '", by_col, "' not found in 'post_data'")
     }
     
-    post_data <- post_data[get(by_col) %in% by_val] 
+    # Validate numeric conditions
+    if (by_condition %in% c("greater", "smaller")) {
+      if (length(by_val) != 1L) stop("For 'greater' or 'smaller' conditions, 'by_val' must be a single value.")
+      if (!is.numeric(post_data[[by_col]]))
+        stop("Column '", by_col, "' must be numeric for 'greater' or 'smaller' comparisons.")
+    }
     
-    # Step 2: sim_dt
+    # Step 1: Filter post_data
+    post_data <- switch(
+      by_condition,
+      equal = post_data[get(by_col) %in% by_val],
+      greater = post_data[get(by_col) > by_val],
+      smaller = post_data[get(by_col) < by_val]
+    )
+    
+    # Step 2: Filter sim_dt based on retained posts
     sim_dt <- sim_dt[
       post_id %in% post_data$post_id & post_id_y %in% post_data$post_id
     ]
     
-    # The edge list connects 'account_id' with 'account_id_y' and counts the connections (as weight)
+    # Step 3: Aggregate edge_list from filtered sim_dt
     edge_list <- sim_dt[
       , .(account_id = pmin(account_id, account_id_y),
-          account_id_y = pmax(account_id, account_id_y))  # Normalize direction
+          account_id_y = pmax(account_id, account_id_y))
     ][
-      , .(weight = .N), by = .(account_id, account_id_y)  # Aggregate
+      , .(weight = .N), by = .(account_id, account_id_y)
     ]
     
-    # Optionally: Filter the edge list based on the edge_weight parameter
+    # Step 4: Optionally filter edge_list by edge_weight
     if (!is.null(edge_weight)) {
       if (verbose) cli::cli_inform("Filter by edge_weight >= {edge_weight}.")
       edge_list <- edge_list[weight >= edge_weight]
       
-      # Filter simdt to only include post pairs that contributed to retained edges
-      sim_dt <- sim_dt[, edge_key := paste0(pmin(account_id, account_id_y), "_", pmax(account_id, account_id_y))][
-        , weight := .N, by = edge_key][weight >= edge_weight][, c("edge_key", "weight") := NULL]
-    } 
-    
-    # Step 4: node_list
-    nodes <- unique(c(sim_dt$account_id, sim_dt$account_id_y))
-    node_list <- node_list[account_id %in% nodes]
-    
-    # Clean up duplicated "account_" prefixes in node_list
-    node_cols <- names(node_list)
-    dup_account_cols <- grep("^account_account_", node_cols, value = TRUE)
-    cleaned_names <- sub("^account_account_", "account_", dup_account_cols)
-    if (length(dup_account_cols)) {
-      data.table::setnames(node_list, old = dup_account_cols, new = cleaned_names)
+      sim_dt <- sim_dt[
+        , edge_key := paste0(pmin(account_id, account_id_y), "_", pmax(account_id, account_id_y))
+      ][
+        , weight := .N, by = edge_key
+      ][
+        weight >= edge_weight
+      ][
+        , c("edge_key", "weight") := NULL
+      ]
     }
     
-    # Ensure correct column order for igraph
-    node_list <- node_list[!duplicated(account_id)] |> dplyr::select(account_id, account_name, dplyr::everything())
+    # Step 5: Filter node_list
+    nodes <- unique(c(sim_dt$account_id, sim_dt$account_id_y))
+    node_list <- node_list[account_id %in% nodes]
+    node_list <- node_list[!duplicated(account_id)][, .SD, .SDcols = c("account_id", "account_name", setdiff(names(node_list), c("account_id", "account_name")))]
     
-    # Step 5: Create the igraph object
-    g <- igraph::graph_from_data_frame(d = edge_list, 
-                                       vertices = node_list, 
-                                       directed = FALSE)
-    
-    # Step 6: Communities object
-    communities <- groups_data$communities
-    filtered_membership <- igraph::membership(communities)[names(igraph::membership(communities)) %in% nodes]
-    # Recreate the community structure
+    # Step 6: Rebuild graph and communities
+    g <- igraph::graph_from_data_frame(d = edge_list, vertices = node_list, directed = FALSE)
+    filtered_membership <- igraph::membership(groups_data$communities)
+    filtered_membership <- filtered_membership[names(filtered_membership) %in% nodes]
     communities <- igraph::make_clusters(g, filtered_membership)
     
-    # Subset remaining objects
-    user_labels <- if ("user_labels" %in% names(groups_data)  && !is.null(groups_data$user_labels)) data.table::copy(groups_data$user_labels[account_id %in% nodes]) else NULL
-    community_labels <- if ("community_labels" %in% names(groups_data)  && !is.null(groups_data$community_labels)) groups_data$community_labels[community %in% unique(node_list$community)] else NULL
-    community_metrics <- if ("community_metrics" %in% names(groups_data) && !is.null(groups_data$community_metrics)) groups_data$community_metrics[community %in% unique(node_list$community)] else NULL
+    # Step 7: Subset and return
+    user_labels <- if ("user_labels" %in% names(groups_data) && !is.null(groups_data$user_labels)) {
+      data.table::copy(groups_data$user_labels[account_id %in% nodes])
+    } else NULL
+    
+    community_labels <- if ("community_labels" %in% names(groups_data) && !is.null(groups_data$community_labels)) {
+      groups_data$community_labels[community %in% unique(node_list$community)]
+    } else NULL
+    
+    community_metrics <- if ("community_metrics" %in% names(groups_data) && !is.null(groups_data$community_metrics)) {
+      groups_data$community_metrics[community %in% unique(node_list$community)]
+    } else NULL
+    
     filter <- if ("filter" %in% names(groups_data)) groups_data$filter else NULL
     params <- if ("params" %in% names(groups_data)) groups_data$params else NULL
     
-    groups_data <- list(graph = g, 
-                        communities = communities,
-                        edge_list = edge_list,
-                        sim_dt = sim_dt,
-                        node_list = node_list,
-                        post_data = post_data,
-                        params = params,
-                        filter = filter,
-                        user_labels = user_labels,
-                        community_labels = community_labels,
-                        community_metrics = community_metrics
-    )    
-    
+    groups_data <- list(
+      graph = g,
+      communities = communities,
+      edge_list = edge_list,
+      sim_dt = sim_dt,
+      node_list = node_list,
+      post_data = post_data,
+      params = params,
+      filter = filter,
+      user_labels = user_labels,
+      community_labels = community_labels,
+      community_metrics = community_metrics
+    )
     
     groups_data <- Filter(Negate(is.null), groups_data)
-  } 
+  }
   
   
-  # Filter by edge weight
+  
+  ### Filter by edge weight
   if (!is.null(edge_weight)) {
     edge_list <- data.table::copy(groups_data$edge_list)
     n_prev <- nrow(edge_list)
@@ -443,6 +471,23 @@ filter_groups_data <- function(groups_data,
     
     groups_data <- subset_after_node_filter(groups_data, keep_accounts)
     groups_data$edge_list <- edge_list_new
+    
+    
+    # Rebuild graph from filtered edges
+    if (nrow(edge_list_new) > 0) {
+      g_new <- igraph::graph_from_data_frame(
+        d = edge_list_new,
+        vertices = groups_data$node_list,
+        directed = FALSE
+      )
+      groups_data$graph <- g_new
+      
+      # Recompute community memberships to stay consistent
+      filtered_membership <- igraph::membership(groups_data$communities)
+      filtered_membership <- filtered_membership[names(filtered_membership) %in% igraph::V(g_new)$name]
+      groups_data$communities <- igraph::make_clusters(g_new, filtered_membership)
+    }
+    
   }
   
   
@@ -837,6 +882,7 @@ filter_groups_data <- function(groups_data,
   new_filter <- list(
     by_col = by_col,
     by_val = by_val,
+    by_condition = by_condition,
     edge_weight = edge_weight,
     time_window = time_window,
     min_simil = min_simil,
