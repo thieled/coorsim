@@ -450,45 +450,70 @@ filter_groups_data <- function(groups_data,
   }
   
   
-  
-  ### Filter by edge weight
+  ### Filter by edge_weight
   if (!is.null(edge_weight)) {
     edge_list <- data.table::copy(groups_data$edge_list)
-    n_prev <- nrow(edge_list)
+    n_before <- nrow(edge_list)
+    
+    # Keep only edges above threshold
     edge_list_new <- edge_list[weight >= edge_weight]
-    n_drop <- n_prev - nrow(edge_list_new)
-    if (verbose) cli::cli_inform("Dropping n = {n_drop} edges by edge_weight >= {edge_weight}.")
+    n_after <- nrow(edge_list_new)
+    n_drop <- n_before - n_after
     
-    node_list <- data.table::copy(groups_data$node_list)
-    node_list_new <- data.table::data.table(account_id = unique(c(edge_list_new$account_id, edge_list_new$account_id_y)))
-    node_list_new <- merge(node_list_new, node_list, by = "account_id", all.x = TRUE)
-    if ("N" %in% names(node_list_new)) node_list_new[, N := NULL]
-    
-    if (is.null(min_comm_size)) min_comm_size <- groups_data$params$min_comm_size %||% 2
-    
-    keep_accounts <- unique(node_list_new[, .N, by = community][
-      N >= min_comm_size][node_list_new, on = "community", nomatch = 0][, account_id])
-    
-    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
-    groups_data$edge_list <- edge_list_new
-    
-    
-    # Rebuild graph from filtered edges
-    if (nrow(edge_list_new) > 0) {
-      g_new <- igraph::graph_from_data_frame(
-        d = edge_list_new,
-        vertices = groups_data$node_list,
-        directed = FALSE
-      )
-      groups_data$graph <- g_new
-      
-      # Recompute community memberships to stay consistent
-      filtered_membership <- igraph::membership(groups_data$communities)
-      filtered_membership <- filtered_membership[names(filtered_membership) %in% igraph::V(g_new)$name]
-      groups_data$communities <- igraph::make_clusters(g_new, filtered_membership)
+    if (verbose) {
+      cli::cli_inform("Filtered {n_drop} edges (kept {n_after}/{n_before}) with weight >= {edge_weight}.")
     }
     
+    # If no edges remain, wipe the graph cleanly
+    if (n_after == 0) {
+      if (verbose) cli::cli_alert_warning("No edges remain after filtering by edge_weight = {edge_weight}. Returning empty graph.")
+      groups_data$edge_list <- edge_list_new
+      groups_data$graph <- igraph::make_empty_graph(directed = FALSE)
+      groups_data$communities <- igraph::make_clusters(groups_data$graph, membership = integer(0))
+      groups_data$node_list <- groups_data$node_list[0]
+    }
+    
+    # Derive node list restricted to accounts in surviving edges
+    valid_accounts <- unique(c(edge_list_new$account_id, edge_list_new$account_id_y))
+    node_list_new <- data.table::copy(groups_data$node_list)[account_id %in% valid_accounts]
+    node_list_new <- unique(node_list_new, by = "account_id")
+    node_list_new <- data.table::setcolorder(node_list_new, "account_id", before=1)
+    
+    # Rebuild a clean graph (rename columns to expected format)
+    g_new <- igraph::graph_from_data_frame(
+      d = edge_list_new,
+      vertices = node_list_new,
+      directed = FALSE
+    )
+    
+    # Update graph and communities
+    groups_data$graph <- g_new
+    groups_data$edge_list <- edge_list_new
+    groups_data$node_list <- node_list_new
+    
+    # Rebuild communities consistent with remaining nodes
+    old_membership <- igraph::membership(groups_data$communities)
+    valid_membership <- old_membership[names(old_membership) %in% igraph::V(g_new)$name]
+    
+    if (length(valid_membership) > 0) {
+      groups_data$communities <- igraph::make_clusters(g_new, valid_membership)
+    } else {
+      groups_data$communities <- igraph::make_clusters(g_new, membership = integer(0))
+    }
+    
+    # Optional community size filter (applied last)
+    if (is.null(min_comm_size)) {
+      min_comm_size <- groups_data$params$min_comm_size %||% 2
+    }
+    
+    # Drop too-small communities
+    keep_accounts <- node_list_new[, .N, by = community][
+      N >= min_comm_size
+    ][node_list_new, on = "community", nomatch = 0][, account_id]
+    
+    groups_data <- subset_after_node_filter(groups_data, keep_accounts)
   }
+  
   
   
   # Filter by stricter similarity or time window
