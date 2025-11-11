@@ -70,12 +70,25 @@ example_user_text <- c(
       list(content = "😂😂😂"),
       list(content = "😂😂😂")
     )
+  ), auto_unbox = TRUE, pretty = FALSE),
+  
+  # Example: U.S. political / Iraq-related spammer
+  jsonlite::toJSON(list(
+    user_name = "Alpha044IraqiHero",
+    posts = list(
+      list(content = "@WhiteHouse @JoeBiden @UNClimateSummit t.co/."),
+      list(content = "@JoeBiden @UNClimateSummit t.co/."),
+      list(content = "@TheDemocrats @UNClimateSummit @JoeBiden @JohnKerry t.co/."),
+      list(content = "@SenateGOP @UNClimateSummit @USUN t.co/.")
+    )
   ), auto_unbox = TRUE, pretty = FALSE)
+  
 )
 
 
 # Answers - Users
 example_user_answer <- c(
+  # Example 1: British nationalist user
   '{
     "description": "UK user supporting Nigel Farage and UKIP, opposing immigration and the EU. Tone is abrasive, emotional, and nationalist with frequent 💜 emojis.",
     "lang": "en",
@@ -92,6 +105,7 @@ example_user_answer <- c(
     "confidence": 0.85
   }',
   
+  # Example 2: European politics news account
   '{
     "description": "EU-focused account sharing factual updates about the 2024 European Parliament elections, including turnout and voting patterns. Tone is neutral and informative.",
     "lang": "en",
@@ -107,6 +121,7 @@ example_user_answer <- c(
     "confidence": 0.95
   }',
   
+  # Example 3: German pro-Russia peace activist
   '{
     "description": "German user endorsing Sarah Wagenknecht’s anti-war stance and advocating peace with Russia. Posts emphasize diplomacy and friendship. Tone is emotional and pacifist.",
     "lang": "de",
@@ -123,7 +138,7 @@ example_user_answer <- c(
     "confidence": 0.85
   }',
 
-  
+  # Example 4: Humorous / low-effort user
   '{
     "description": "User posting repeated laughing emojis without substantial content. The content appears non-political and purely expressive.",
     "lang": "und",
@@ -134,7 +149,24 @@ example_user_answer <- c(
     "incivility": "no",
     "elaborate": "simple",
     "confidence": 0.6
-  }'
+  }',
+  
+  # Example: U.S. political / Iraq-related spammer
+  '{
+  "description": "User potentially based in Iraq, repeatedly tagging Joe Biden and other top U.S. Democrats in short posts containing only links. The behavior appears spam-like, with minimal original content or commentary.",
+  "lang": "en",
+  "topic": ["politics", "spam", "social media behavior"],
+  "named_entities": [
+    {"entity": "Joe Biden", "sentiment": "neutral"},
+    {"entity": "John Kerry", "sentiment": "neutral"},
+    {"entity": "White House", "sentiment": "neutral"}
+  ],
+  "repetitive_patterns": ["@JoeBiden", "t.co/", "@UNClimateSummit"],
+  "emotion_valence": "neutral",
+  "incivility": "no",
+  "elaborate": "simple",
+  "confidence": 0.9
+}'
   
 )
 
@@ -263,18 +295,109 @@ Use ### EXAMPLES ### only to understand the output format, but ignore its conten
 
 example_comm_text <- c(
   # Example 1: UKIP community
-  '[{"description": "UK user supporting Nigel Farage and UKIP, opposing immigration and the EU. Tone is abrasive and emotional.", "lang": "en", "topic": ["politics","society"], "named_entities": [{"entity":"Nigel Farage","sentiment":"positive"}, {"entity":"UKIP","sentiment":"positive"}, {"entity":"EU","sentiment":"negative"}], "repetitive_patterns":["💜","#Farage2024"], "incivility":"yes","elaborate":"moderate"},
-    {"description": "User praising UKIP and Farage with patriotic tone. Frequent 💜 emojis indicate partisan loyalty.", "lang":"en", "topic":["politics"], "named_entities":[{"entity":"UKIP","sentiment":"positive"},{"entity":"EU","sentiment":"negative"}], "repetitive_patterns":["💜","#Farage2024"], "incivility":"yes","elaborate":"simple"}]',
+  '[{"name": "brit_voice92",
+     "description": "UK user supporting Nigel Farage and UKIP, opposing immigration and the EU. Tone is abrasive and emotional.",
+     "lang": "en",
+     "topic": ["politics", "society"],
+     "named_entities": [
+       {"entity": "Nigel Farage", "sentiment": "positive"},
+       {"entity": "UKIP", "sentiment": "positive"},
+       {"entity": "EU", "sentiment": "negative"}
+     ],
+     "repetitive_patterns": ["💜", "#Farage2024"],
+     "incivility": "yes",
+     "elaborate": "moderate"},
+    {"name": "ukpatriot_84",
+     "description": "User praising UKIP and Farage with patriotic tone. Frequent 💜 emojis indicate partisan loyalty.",
+     "lang": "en",
+     "topic": ["politics"],
+     "named_entities": [
+       {"entity": "UKIP", "sentiment": "positive"},
+       {"entity": "EU", "sentiment": "negative"}
+     ],
+     "repetitive_patterns": ["💜", "#Farage2024"],
+     "incivility": "yes",
+     "elaborate": "simple"}]',
   
   # Example 2: Pro-Wagenknecht peace community
-  '[{"description": "German user endorsing Sarah Wagenknecht’s peace initiatives and criticizing NATO militarism. Tone is emotional, pacifist, and patriotic.", "lang":"de", "topic":["politics","security"], "named_entities":[{"entity":"Sarah Wagenknecht","sentiment":"positive"},{"entity":"Russia","sentiment":"positive"},{"entity":"NATO","sentiment":"negative"}], "repetitive_patterns":["🇩🇪","🇷🇺","✌️"], "incivility":"no","elaborate":"moderate"},
-    {"description": "German user promoting friendship with Russia and opposing weapons delivery to Ukraine. Tone is hopeful and naive.", "lang":"de", "topic":["politics","society"], "named_entities":[{"entity":"Russia","sentiment":"positive"},{"entity":"Ukraine","sentiment":"negative"}], "repetitive_patterns":["🇩🇪","🇷🇺"], "incivility":"no","elaborate":"moderate"}]',
+  '[{"name": "denker_fuer_frieden",
+     "description": "German user endorsing Sarah Wagenknecht’s peace initiatives and criticizing NATO militarism. Tone is emotional, pacifist, and patriotic.",
+     "lang": "de",
+     "topic": ["politics", "security"],
+     "named_entities": [
+       {"entity": "Sarah Wagenknecht", "sentiment": "positive"},
+       {"entity": "Russia", "sentiment": "positive"},
+       {"entity": "NATO", "sentiment": "negative"}
+     ],
+     "repetitive_patterns": ["🇩🇪", "🇷🇺", "✌️"],
+     "incivility": "no",
+     "elaborate": "moderate"},
+    {"name": "friedenjetzt88",
+     "description": "German user promoting friendship with Russia and opposing weapons delivery to Ukraine. Tone is hopeful and naive.",
+     "lang": "de",
+     "topic": ["politics", "society"],
+     "named_entities": [
+       {"entity": "Russia", "sentiment": "positive"},
+       {"entity": "Ukraine", "sentiment": "negative"}
+     ],
+     "repetitive_patterns": ["🇩🇪", "🇷🇺"],
+     "incivility": "no",
+     "elaborate": "moderate"}]',
   
   # Example 3: Mixed and unclear community
-  '[{"description": "User posting repeated laughing emojis without substantial content. The content appears non-political and purely expressive.", "lang": "und", "topic": [], "named_entities": [], "repetitive_patterns": ["😂😂😂"], "incivility": "no", "elaborate": "simple"},
-    {"description": "User sharing URLs and humorous comments with no consistent topic. Posts are sarcastic and informal, sometimes including light profanity.", "lang": "en", "topic": ["society"], "named_entities": [], "repetitive_patterns": ["lol", "😂"], "incivility": "no", "elaborate": "simple"},
-    {"description": "User reacting to news on CNN.com with emojis and brief remarks, sometimes mocking politicians without clear stance.", "lang": "en", "topic": ["politics","society"], "named_entities": [{"entity":"Biden","sentiment":"neutral"}], "repetitive_patterns":["😂","🙄"], "incivility": "no", "elaborate": "simple"}]'
+  '[{"name": "mr_niceguy",
+     "description": "User posting repeated laughing emojis without substantial content. The content appears non-political and purely expressive.",
+     "lang": "und",
+     "topic": [],
+     "named_entities": [],
+     "repetitive_patterns": ["😂😂😂"],
+     "incivility": "no",
+     "elaborate": "simple"},
+    {"name": "coolbeans44",
+     "description": "User sharing URLs and humorous comments with no consistent topic. Posts are sarcastic and informal, sometimes including light profanity.",
+     "lang": "en",
+     "topic": ["society"],
+     "named_entities": [],
+     "repetitive_patterns": ["lol", "😂"],
+     "incivility": "no",
+     "elaborate": "simple"},
+    {"name": "newsreactor_x",
+     "description": "User reacting to news on major outlets with emojis and brief remarks, sometimes mocking politicians without clear stance.",
+     "lang": "en",
+     "topic": ["politics", "society"],
+     "named_entities": [
+       {"entity": "Biden", "sentiment": "neutral"}
+     ],
+     "repetitive_patterns": ["😂", "🙄"],
+     "incivility": "no",
+     "elaborate": "simple"}]',
+  
+  # Example 4: U.S.–Iraq political spammer community
+  '[{"name": "Alpha044IraqiHero",
+     "description": "User likely based in Iraq, repeatedly tagging Joe Biden and other top U.S. Democrats in short link-only posts. The behavior appears spam-like and coordinated.",
+     "lang": "en",
+     "topic": ["politics", "spam", "foreign policy"],
+     "named_entities": [
+       {"entity": "Joe Biden", "sentiment": "neutral"},
+       {"entity": "John Kerry", "sentiment": "neutral"},
+       {"entity": "White House", "sentiment": "neutral"}
+     ],
+     "repetitive_patterns": ["@JoeBiden", "@UNClimateSummit", "t.co/"],
+     "incivility": "no",
+     "elaborate": "simple"},
+    {"name": "A044LeftBehind",
+     "description": "Account engaged in repeated mentions of U.S. political leaders with minimal content. Likely semi-automated or coordinated pattern focused on link amplification.",
+     "lang": "en",
+     "topic": ["politics", "social media behavior"],
+     "named_entities": [
+       {"entity": "Joe Biden", "sentiment": "neutral"},
+       {"entity": "John Kerry", "sentiment": "neutral"}
+     ],
+     "repetitive_patterns": ["t.co/", "@JoeBiden", "@WhiteHouse"],
+     "incivility": "no",
+     "elaborate": "simple"}]'
 )
+
 
 example_comm_answer <- c(
   '{
@@ -319,8 +442,25 @@ example_comm_answer <- c(
     "incivility": "no",
     "elaborate": "simple",
     "confidence": 0.6
+  }',
+  
+  '{
+    "label": "US–Iraq Political Spammer Network",
+    "description": "Accounts, many referencing Iraq or using recurring 044 identifiers, repeatedly tag Joe Biden and other top U.S. officials in short link-only posts. The activity appears coordinated or automated, focused on visibility rather than dialogue.",
+    "lang": "en",
+    "topic": ["politics", "spam", "foreign policy"],
+    "named_entities": [
+      {"entity": "Joe Biden", "sentiment": "neutral"},
+      {"entity": "John Kerry", "sentiment": "neutral"},
+      {"entity": "White House", "sentiment": "neutral"}
+    ],
+    "repetitive_patterns": ["@JoeBiden", "@UNClimateSummit", "t.co/"],
+    "incivility": "no",
+    "elaborate": "simple",
+    "confidence": 0.88
   }'
 )
+
 
 # Slices ------------------------------------------------------------------
 
