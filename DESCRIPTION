@@ -1,7 +1,7 @@
 Package: coorsim
 Type: Package
 Title: Detects Coordinated Posting Behavior Based on Co-Similarity
-Version: 0.0.6.010
+Version: 0.0.6.020
 Date: 2024-10-11
 Authors@R: 
     person("Thiele", "Daniel", email="daniel.thiele@fu-berlin.de", role = c("cre", "aut"))

@@ -251,10 +251,12 @@ get_community_metrics <- function(groups_data,
   # Compute metrics
   node_list[, a_age_h := as.numeric(difftime(account_last_post, account_creation_date, units = "hours"))]
   node_list[, a_ffr := ifelse(is.na(follower) | is.na(following), NA_real_,
-                              ifelse(following == 0, Inf, follower / following))]
+                              (follower + 1e-4)  / (following + 1e-4))]
   node_list[, a_npost := account_n_post]
+  node_list[, a_following := following]
+  node_list[, a_follower := follower]
   
-  metrics <- c("a_age_h", "a_ffr", "a_npost")
+  metrics <- c("a_age_h", "a_ffr", "a_following", "a_follower", "a_npost")
   
   
   # Set individual NA values to 0 unless the whole column is NA
@@ -274,6 +276,12 @@ get_community_metrics <- function(groups_data,
   
   # Merge and return
   account_metrics <- merge(mean_dt, sd_dt, by = "community", sort = FALSE)
+  
+  # additional summary metrics
+  summary_metrics <- node_list[, .(
+    a_followers_gini = ineq::ineq(follower, type = "Gini"),
+    a_posts_n = sum(account_n_post)
+  ), by = community]
   
   
   if(content_stats == T){
@@ -311,6 +319,7 @@ get_community_metrics <- function(groups_data,
   metrics_dt <- merge(metrics_dt, similarity_metrics,     by = "community", all.x = TRUE, sort = FALSE)
   metrics_dt <- merge(metrics_dt, temporal_metrics,       by = "community", all.x = TRUE, sort = FALSE)
   metrics_dt <- merge(metrics_dt, account_metrics,        by = "community", all.x = TRUE, sort = FALSE)
+  metrics_dt <- merge(metrics_dt, summary_metrics,        by = "community", all.x = TRUE, sort = FALSE)
   
   if (content_stats) {
     if (!is.null(post_content_metrics) && data.table::is.data.table(post_content_metrics)) {
