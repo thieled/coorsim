@@ -12,6 +12,7 @@ plot_posts(
   start_color = 0,
   end_color = 1,
   use_palette = NULL,
+  use_order = NULL,
   title_prefix = NULL,
   ncol = 2,
   include_examples = FALSE,
@@ -39,7 +40,11 @@ plot all communities together in one plot.}
 
 \item{start_color, end_color}{Numeric range for viridis palette.}
 
-\item{use_palette}{Optional custom palette function(n).}
+\item{use_palette}{Optional custom palette function(n) or a character vector
+of hex colors (length >= number of communities).}
+
+\item{use_order}{Optional vector specifying the order in which communities
+are plotted (and mapped to colors). Values are matched to community ids.}
 
 \item{title_prefix}{Optional prefix for plot title.}
 

@@ -15,7 +15,8 @@ plot_communities(
   by_community = TRUE,
   ncol = 2,
   expand_hairballs = NULL,
-  use_palette = NULL
+  use_palette = NULL,
+  use_order = NULL
 )
 }
 \arguments{
@@ -25,41 +26,33 @@ and a node table (`network_data$node_list`, coercible to a tibble). Optionally i
 - `filter`: optional filter metadata
 - `community_labels`: a data frame with `community`, `label`, `description`, `n_accs`, and `n_posts`}
 
-\item{palette_option}{Character. Viridis palette option (e.g., "A", "B", "C", "D"). Passed to `viridis::viridis()`.}
+\item{palette_option}{Character. Viridis palette option (e.g., "A", "B", "C", "D").}
 
-\item{end_color}{Numeric. End value for viridis color scale (between 0 and 1). Default is `1`.}
+\item{end_color}{Numeric. End value for viridis color scale (between 0 and 1).}
 
-\item{start_color}{Numeric. Start value for viridis color scale (between 0 and 1). Default is `0`.}
+\item{start_color}{Numeric. Start value for viridis color scale (between 0 and 1).}
 
-\item{title_prefix}{Character. Optional prefix for the plot title. If `NULL`, a default title is used.}
+\item{title_prefix}{Optional prefix for the plot title.}
 
-\item{n_top_nodes}{Integer. Number of top-degree nodes per community to label. Default is `10`.}
+\item{n_top_nodes}{Integer. Number of top-degree nodes per community to label.}
 
-\item{label_fontsize}{Integer. Base font size for text panels. If `NULL`, size is automatically scaled to `ncol`.}
+\item{label_fontsize}{Integer. Base font size for text panels. If NULL, size is auto-scaled.}
 
-\item{by_community}{Logical. If `TRUE`, create individual plots per community with metadata side panels. 
-If `FALSE`, show a single integrated graph. Default is `TRUE`.}
+\item{by_community}{Logical. If TRUE, create individual plots per community with metadata side panels.}
 
-\item{ncol}{Integer. Number of columns in the grid layout when `by_community = TRUE`. Default is `2`.}
+\item{ncol}{Integer. Number of columns in the grid layout when by_community = TRUE.}
 
-\item{expand_hairballs}{Numeric. Factor to visually expand densely connected communities 
-("hairballs") to avoid overlap. Default is `NULL`.}
+\item{expand_hairballs}{Numeric. Factor to visually expand dense communities.}
 
-\item{use_palette}{Function. User-defined palette from a function, e.g. `ggsci::pal_aaas()`. Overrides the default viridis palette. Default is `NULL`.}
+\item{use_palette}{Optional palette: function(n) or character vector of hex colors.}
+
+\item{use_order}{Optional vector specifying the order in which communities are plotted.}
 }
 \value{
-A `ggplot` or `patchwork` object showing the coordinated communities, ready for rendering or saving.
+A ggplot or patchwork object.
 }
 \description{
 Visualizes communities of coordinated accounts within a network graph, either as a single overview plot
 or as a grid of community-level plots with metadata side panels. Nodes represent accounts, edges reflect
 similarity or interaction, and layout and annotations emphasize coordination patterns.
-}
-\details{
-Communities are plotted using a `stress` layout and optionally separated into grid plots with 
-accompanying text summaries. Top-degree nodes within each community are labeled. If metadata 
-(`community_labels`) is available, it will be shown alongside each subgraph.
-
-Dense subgraphs (high edge density and size) can be expanded for visual clarity using the 
-`expand_hairballs` argument.
 }
