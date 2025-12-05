@@ -81,11 +81,26 @@ plot_posts <- function(network_data,
   
   # Palette
   if (is.null(use_palette)) {
-    cols <- viridis::viridis(n_colors, option = palette_option, begin = start_color, end = end_color)
-  } else {
+    cols <- viridis::viridis(
+      n_colors,
+      option = palette_option,
+      begin = start_color,
+      end   = end_color
+    )
+  } else if (is.function(use_palette)) {
+    # palette function, e.g., ggsci::pal_d3("category20")
     cols <- use_palette(n_colors)
     if (length(cols) < n_colors) stop("Custom palette too short.")
+  } else if (is.character(use_palette)) {
+    # vector of hex colors
+    if (length(use_palette) < n_colors)
+      stop("Color vector in 'use_palette' is shorter than number of communities.")
+    cols <- use_palette[seq_len(n_colors)]
+  } else {
+    stop("'use_palette' must be NULL, a palette function, or a character vector of colors.")
   }
+  
+  # assign names following the sorted community order
   names(cols) <- unique_comms
   
   base_size <- if (is.null(label_fontsize)) 11 else label_fontsize
@@ -265,18 +280,36 @@ plot_communities <- function(network_data,
   if (!is.null(network_data$params$cluster_method) && network_data$params$cluster_method != "FSA_V") network_data$params$theta <- NULL
   
   # Prepare color palette
-  unique_communities <- unique(dplyr::filter(node_list, account_id %in% igraph::V(g)$name)$community)
+  unique_communities <- sort(unique(dplyr::filter(node_list, account_id %in% igraph::V(g)$name)$community))
   n_colors <- length(unique_communities)
   
-  community_colors <- if (is.null(use_palette)) {
-    viridis::viridis(n_colors, option = palette_option, begin = start_color, end = end_color)
+  if (is.null(use_palette)) {
+    
+    # default viridis palette
+    community_colors <- viridis::viridis(
+      n_colors,
+      option = palette_option,
+      begin = start_color,
+      end   = end_color
+    )
+    
+  } else if (is.function(use_palette)) {
+    
+    # palette function, e.g. ggsci::pal_d3("category20")
+    community_colors <- use_palette(n_colors)
+    if (length(community_colors) < n_colors)
+      stop("Palette function returned too few colors.")
+    
+  } else if (is.character(use_palette)) {
+    
+    # user-supplied hex color vector
+    if (length(use_palette) < n_colors)
+      stop("'use_palette' is a color vector but shorter than number of communities.")
+    community_colors <- use_palette[seq_len(n_colors)]
+    
   } else {
-    if (!is.function(use_palette)) stop("'use_palette' must be a function (e.g., ggsci::pal_d3('category20'))")
-    cols <- use_palette(n_colors)
-    if (length(cols) < n_colors) stop(sprintf("Palette has only %d colors but %d are required.", length(cols), n_colors))
-    cols
+    stop("'use_palette' must be NULL, a function, or a character vector of colors.")
   }
-  names(community_colors) <- unique_communities
   
   
   
