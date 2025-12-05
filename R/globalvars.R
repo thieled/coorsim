@@ -118,7 +118,9 @@ utils::globalVariables(c(".",
                          "..final_col_order",
                          "schema",
                          "schema_comm",
-                         "prompts"
+                         "prompts",
+                         "a_follower",
+                         "a_following" 
                          ))
 
 

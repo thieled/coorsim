@@ -56,6 +56,11 @@ get_community_metrics <- function(groups_data,
                                  verbose = T
 ){
   
+  if (!requireNamespace("ineq", quietly = TRUE)) {
+    stop("Package 'ineq' is required for this function. Please install it.")
+  }
+  
+  
   g <- groups_data$graph
   communities <- groups_data$communities
   node_list <- data.table::copy(groups_data$node_list)

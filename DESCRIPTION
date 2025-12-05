@@ -18,7 +18,6 @@ Imports:
     dplyr,
     igraph,
     lubridate,
-    magrittr,
     Matrix,
     Rcpp (>= 1.0.12),
     reticulate,
@@ -58,6 +57,7 @@ Suggests:
     tidygraph,
     viridis,
     xgboost,
-    mltools
+    mltools,
+    ineq
 Config/testthat/edition: 3
 LazyData: true
