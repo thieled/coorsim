@@ -2,79 +2,64 @@
 % Please edit documentation in R/06_plotting.R
 \name{plot_posts}
 \alias{plot_posts}
-\title{Plot Coordinated Posts of Communities Over Time}
+\title{Plot Coordinated Posts Over Time}
 \usage{
 plot_posts(
   network_data,
-  by_communtiy = T,
+  by_community = TRUE,
   unit = "6 hours",
-  component_size_threshold = NULL,
   palette_option = "A",
   start_color = 0,
-  end_color = 0.9,
+  end_color = 1,
+  use_palette = NULL,
   title_prefix = NULL,
-  include_examples = T,
-  label_fontsize = NULL,
-  add_labels = F,
-  legend = T,
+  ncol = 2,
+  include_examples = FALSE,
   n_examples = 2,
   trunc = 100,
-  wrap = NULL,
-  fontsize = 4,
+  label_fontsize = NULL,
+  legend = TRUE,
   seed = 42,
-  verbose = T,
-  use_palette = NULL,
-  ncol = 2
+  verbose = TRUE
 )
 }
 \arguments{
-\item{network_data}{A named list containing at least `post_data` (as a data.table) and `graph` (an igraph object).
-Optionally includes `community_labels` (data.frame with label metadata), `sim_dt` (similarity data), and
-additional metadata such as `params` and `filter`.}
+\item{network_data}{A list containing:
+- post_data: data.table or data.frame with columns account_id, community, time
+- node_list: community membership table (account_id, community)
+- params, filter: optional lists for caption metadata
+- community_labels: optional data.frame with columns community, label}
 
-\item{by_communtiy}{Logical. If `TRUE`, produces separate plots per community using patchwork. Default is `TRUE`.}
+\item{by_community}{Logical. If TRUE, plot one panel per community; if FALSE
+plot all communities together in one plot.}
 
-\item{unit}{A string such as `"6 hours"` passed to `lubridate::floor_date()` to control temporal aggregation.}
+\item{unit}{Character time unit passed to lubridate::floor_date().}
 
-\item{component_size_threshold}{Optional integer. Minimum size of connected components to retain. Not yet implemented.}
+\item{palette_option}{Viridis palette option ("A","B","C","D").}
 
-\item{palette_option}{Character. Passed to `viridis::viridis()` to define the color palette. Default is `"A"`.}
+\item{start_color, end_color}{Numeric range for viridis palette.}
 
-\item{start_color}{Numeric between 0 and 1. Start point for color interpolation. Default is `0`.}
+\item{use_palette}{Optional custom palette function(n).}
 
-\item{end_color}{Numeric between 0 and 1. End point for color interpolation. Default is `0.9`.}
+\item{title_prefix}{Optional prefix for plot title.}
 
-\item{title_prefix}{Optional character string used to prefix the plot title. Default is `NULL`.}
+\item{ncol}{Number of columns for per-community layout.}
 
-\item{include_examples}{Logical. If `TRUE`, shows strongest coordination examples at local maxima. Default is `TRUE`.}
+\item{include_examples, n_examples, trunc}{Reserved for future use.}
 
-\item{label_fontsize}{Integer. Base font size for side-panel text in facetted output. Calculated automatically if `NULL`.}
+\item{label_fontsize}{Base font size.}
 
-\item{add_labels}{Logical. If `TRUE` and `community_labels` is available, adds generated labels to local maxima. Default is `FALSE`.}
+\item{legend}{Logical. Show legend when by_community = FALSE.}
 
-\item{legend}{Logical. Whether to include the community color legend. Default is `TRUE`.}
+\item{seed}{Random seed (not used yet).}
 
-\item{n_examples}{Integer. Number of example pairs to show at each peak. Default is `2`.}
-
-\item{trunc}{Integer. Maximum number of characters to retain in sampled post text. Default is `100`.}
-
-\item{wrap}{Optional integer. If set, wraps post content text at given width; otherwise no wrapping is applied.}
-
-\item{fontsize}{Numeric. Font size used in annotations and labels (geom_text_repel or text panels). Default is `4`.}
-
-\item{seed}{Integer. Random seed for reproducibility in sampling examples. Default is `42`.}
-
-\item{verbose}{Logical. If `TRUE`, prints progress via `cli::cli_inform()`. Default is `TRUE`.}
-
-\item{use_palette}{Optional palette function (e.g. `ggsci::pal_d3("category20")`) to override viridis. Default is `NULL`.}
-
-\item{ncol}{Integer. Number of columns in the patchwork layout when `by_communtiy = TRUE`. Default is `2`.}
+\item{verbose}{Print progress messages.}
 }
 \value{
-A `ggplot2` or `patchwork` object showing coordinated posting timelines by community.
+A ggplot or patchwork object.
 }
 \description{
-Creates a time series barplot showing coordinated posting activity by community. The plot can either
-aggregate all communities into one plot (stacked by color), or display separate barplots per community 
-(with optional textual annotations or examples of coordinated behavior).
+Creates line plots showing coordinated posts over time. The function can
+either plot all communities together (colored lines) or produce individual
+community-level time series arranged in a grid.
 }

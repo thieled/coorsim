@@ -1,468 +1,168 @@
-
-#' Plot Coordinated Posts of Communities Over Time
+#' Plot Coordinated Posts Over Time
 #'
-#' Creates a time series barplot showing coordinated posting activity by community. The plot can either
-#' aggregate all communities into one plot (stacked by color), or display separate barplots per community 
-#' (with optional textual annotations or examples of coordinated behavior).
+#' Creates line plots showing coordinated posts over time. The function can
+#' either plot all communities together (colored lines) or produce individual
+#' community-level time series arranged in a grid.
 #'
-#' @param network_data A named list containing at least `post_data` (as a data.table) and `graph` (an igraph object).
-#'   Optionally includes `community_labels` (data.frame with label metadata), `sim_dt` (similarity data), and
-#'   additional metadata such as `params` and `filter`.
-#' @param by_communtiy Logical. If `TRUE`, produces separate plots per community using patchwork. Default is `TRUE`.
-#' @param unit A string such as `"6 hours"` passed to `lubridate::floor_date()` to control temporal aggregation.
-#' @param component_size_threshold Optional integer. Minimum size of connected components to retain. Not yet implemented.
-#' @param palette_option Character. Passed to `viridis::viridis()` to define the color palette. Default is `"A"`.
-#' @param start_color Numeric between 0 and 1. Start point for color interpolation. Default is `0`.
-#' @param end_color Numeric between 0 and 1. End point for color interpolation. Default is `0.9`.
-#' @param title_prefix Optional character string used to prefix the plot title. Default is `NULL`.
-#' @param include_examples Logical. If `TRUE`, shows strongest coordination examples at local maxima. Default is `TRUE`.
-#' @param label_fontsize Integer. Base font size for side-panel text in facetted output. Calculated automatically if `NULL`.
-#' @param add_labels Logical. If `TRUE` and `community_labels` is available, adds generated labels to local maxima. Default is `FALSE`.
-#' @param legend Logical. Whether to include the community color legend. Default is `TRUE`.
-#' @param n_examples Integer. Number of example pairs to show at each peak. Default is `2`.
-#' @param trunc Integer. Maximum number of characters to retain in sampled post text. Default is `100`.
-#' @param wrap Optional integer. If set, wraps post content text at given width; otherwise no wrapping is applied.
-#' @param fontsize Numeric. Font size used in annotations and labels (geom_text_repel or text panels). Default is `4`.
-#' @param seed Integer. Random seed for reproducibility in sampling examples. Default is `42`.
-#' @param verbose Logical. If `TRUE`, prints progress via `cli::cli_inform()`. Default is `TRUE`.
-#' @param use_palette Optional palette function (e.g. `ggsci::pal_d3("category20")`) to override viridis. Default is `NULL`.
-#' @param ncol Integer. Number of columns in the patchwork layout when `by_communtiy = TRUE`. Default is `2`.
+#' @param network_data A list containing:
+#'   - post_data: data.table or data.frame with columns account_id, community, time
+#'   - node_list: community membership table (account_id, community)
+#'   - params, filter: optional lists for caption metadata
+#'   - community_labels: optional data.frame with columns community, label
+#' @param by_community Logical. If TRUE, plot one panel per community; if FALSE
+#'   plot all communities together in one plot.
+#' @param unit Character time unit passed to lubridate::floor_date().
+#' @param palette_option Viridis palette option ("A","B","C","D").
+#' @param start_color,end_color Numeric range for viridis palette.
+#' @param use_palette Optional custom palette function(n).
+#' @param title_prefix Optional prefix for plot title.
+#' @param ncol Number of columns for per-community layout.
+#' @param include_examples,n_examples,trunc Reserved for future use.
+#' @param label_fontsize Base font size.
+#' @param legend Logical. Show legend when by_community = FALSE.
+#' @param seed Random seed (not used yet).
+#' @param verbose Print progress messages.
 #'
-#' @return A `ggplot2` or `patchwork` object showing coordinated posting timelines by community.
-#'
+#' @return A ggplot or patchwork object.
 #' @export
-plot_posts <- function(network_data, 
-                       by_communtiy = T,
+plot_posts <- function(network_data,
+                       by_community = TRUE,
                        unit = "6 hours",
-                       component_size_threshold = NULL,
-                       palette_option = "A", 
+                       palette_option = "A",
                        start_color = 0,
-                       end_color = 0.9,
+                       end_color = 1,
+                       use_palette = NULL,
                        title_prefix = NULL,
-                       include_examples= T,
-                       label_fontsize = NULL,
-                       add_labels = F,
-                       legend = T,
+                       ncol = 2,
+                       include_examples = FALSE,
                        n_examples = 2,
                        trunc = 100,
-                       wrap = NULL,
-                       fontsize = 4,
+                       label_fontsize = NULL,
+                       legend = TRUE,
                        seed = 42,
-                       verbose = T,
-                       use_palette = NULL,
-                       ncol = 2) {
+                       verbose = TRUE) {
   
-  
-  if(!"post_data" %in% names(network_data)){
-    stop("No 'post_data' provided in 'netword_data'. Unable to plot.")
+  for (pkg in c("data.table","ggplot2","viridis","patchwork","lubridate","stringr","cli")) {
+    if (!requireNamespace(pkg, quietly = TRUE))
+      stop("Package '", pkg, "' is required.")
   }
   
-  if(include_examples){
-    if(!"content" %in% names(network_data$post_data)){
-      warning("No 'content' in post_data. Please augment your network_data object. Proceeding without examples.")
-      include_examples <- FALSE  
-    }
-  }
+  dt <- data.table::as.data.table(network_data$post_data)
+  node_list <- data.table::as.data.table(network_data$node_list)
   
-  if(add_labels){
-    if(!"community_labels" %in% names(network_data)){
-      warning("No 'labelled_communities' in network_data. Please generate labels. Proceeding without labels.")
-      add_labels <- FALSE
-    }
-  }
+  if (!all(c("community","time") %in% names(dt)))
+    stop("post_data must contain 'community' and 'time'.")
   
-  # Require packages
-  required_pkgs <- c("patchwork", "ggplot2", "viridis", "ggrepel")
-  
-  for (pkg in required_pkgs) {
-    if (!requireNamespace(pkg, quietly = TRUE)) {
-      stop(paste0("Package '", pkg, "' is required for this function. Please install it using install.packages(\"", pkg, "\")."), call. = FALSE)
-    }
-  }
-  
-  
-  # Create copy of dt
-  node_list <- dplyr::as_tibble(network_data$node_list)
-  dt <- data.table::copy(network_data$post_data)
-  g <- network_data$graph
-  
-  ucfirst <- function(x) {
-    paste0(toupper(substring(x, 1, 1)), substring(x, 2))
-  }
-  # Extract parameters and filter info
-  get_caption <- function(x, label) {
+  # Caption builder (same style as plot_communities)
+  ucfirst <- function(x) paste0(toupper(substr(x,1,1)), substr(x,2,nchar(x)))
+  get_cap <- function(label) {
     if (!label %in% names(network_data)) return("")
-    
     x <- network_data[[label]]
-    
-    # remove NULL or entirely NA entries
-    x <- x[!sapply(x, function(v) is.null(v) || all(is.na(v)))]
-    
-    # format each value (handle vectors too)
-    formatted <- mapply(function(nm, val) {
-      if (is.numeric(val)) {
-        paste(format(round(val, 2), trim = TRUE), collapse = ", ")
-      } else {
-        paste(as.character(val), collapse = ", ")
-      }
-    }, nm = names(x), val = x, USE.NAMES = FALSE)
-    
-    paste0(ucfirst(label), ": ", paste(names(x), formatted, sep = ": ", collapse = "; "), ".")
+    x <- x[!vapply(x, function(v) is.null(v) || all(is.na(v)), logical(1L))]
+    if (length(x)==0L) return("")
+    vals <- mapply(function(nm,v)
+      paste(nm, if(is.numeric(v)) paste(round(v,2),collapse=", ") else paste(v,collapse=", "), sep=": "),
+      nm = names(x), v = x)
+    paste0(ucfirst(label), ": ", paste(vals, collapse="; "), ".")
   }
   
-  param_string  <- get_caption(network_data, "params")
-  filter_string <- get_caption(network_data, "filter")
-  caption <-  paste0(stringr::str_wrap(param_string, width = 200, whitespace_only = T),
-                     "\n", stringr::str_wrap(filter_string, width = 200, whitespace_only = T))
+  caption <- paste(
+    stringr::str_wrap(get_cap("params"), 200),
+    stringr::str_wrap(get_cap("filter"), 200),
+    sep = "\n"
+  )
   
-  # Title
-  title <- if (!is.null(title_prefix)) paste(title_prefix, "Coordinated posts over time.") else "Coordinated posts over time."
+  title <- if (!is.null(title_prefix)) paste(title_prefix, "Coordinated posts over time") else "Coordinated posts over time"
   
-  # Prepare color palette
-  unique_communities <- unique(dplyr::filter(node_list, account_id %in% igraph::V(g)$name)$community)
-  n_colors <- length(unique_communities)
+  # Communities
+  dt[, community := as.character(community)]
+  unique_comms <- sort(unique(dt$community))
+  n_colors <- length(unique_comms)
   
-  community_colors <- if (is.null(use_palette)) {
-    viridis::viridis(n_colors, option = palette_option, begin = start_color, end = end_color)
+  # Palette
+  if (is.null(use_palette)) {
+    cols <- viridis::viridis(n_colors, option = palette_option, begin = start_color, end = end_color)
   } else {
-    if (!is.function(use_palette)) stop("'use_palette' must be a function (e.g., ggsci::pal_d3('category20'))")
     cols <- use_palette(n_colors)
-    if (length(cols) < n_colors) stop(sprintf("Palette has only %d colors but %d are required.", length(cols), n_colors))
-    cols
+    if (length(cols) < n_colors) stop("Custom palette too short.")
   }
-  names(community_colors) <- unique_communities
+  names(cols) <- unique_comms
   
+  base_size <- if (is.null(label_fontsize)) 11 else label_fontsize
   
-  # Font sizes
-  if (is.null(ncol)) ncol <- 1
-  if (is.null(label_fontsize)) label_fontsize <- round(max(6, 12 - length(unique_communities) / 12 - (ncol - 1) * 0.5), 0)
-  label.fontsize <- c(label_fontsize, label_fontsize - 2)
+  # Time aggregation
+  if (verbose) cli::cli_inform("Aggregating posts.")
+  dt[, time_floored := lubridate::floor_date(lubridate::as_datetime(time), unit)]
+  agg <- dt[, .N, by = .(community, time_floored)]
   
+  # Community stats
+  comm_post_stats <- dt[, .(n_comm_posts = .N), by = community]
+  agg <- merge(agg, comm_post_stats, by="community", all.x=TRUE)
   
-  ### Step 3: Prepare Data
+  # Add default labels
+  agg[, community_label := paste0(community, " [n_posts=", n_comm_posts, "]")]
   
-  ### Prepare data
-  if(verbose)cli::cli_inform("Preparing post data.")
-  
-  # Floor the 'time' column per hour and per day
-  dt[, time_floored := lubridate::floor_date(lubridate::as_datetime(time), unit = unit)]
-  
-  # Calculate the number of observations per community and per floored time
-  agg_data <- dt[, .N, by = .(community, time_floored)]
-  
-  # Remove rows with NA in time_floored_hour or N (though likely .N won't produce NA)
-  agg_data <- agg_data[!is.na(time_floored) & !is.na(N)]
-  
-  # Community member size stats
-  comm_stats_dt <- unique(dt, by = "account_id")[, .N, by = community]
-  comm_post_stats_dt <- dt[, .(n_comm_posts = .N), by = community]
-  agg_data <- dplyr::left_join(agg_data, comm_post_stats_dt)
-  agg_data <- agg_data |> dplyr::mutate(community_label = paste0(community, " \n [N=", n_comm_posts, "]")) 
-  
-  # Use Labels if labels were generated
-  if("community_labels" %in% names(network_data)) {
-    if(verbose)cli::cli_inform("Using generated labels.")
-    comm_labels <- network_data$community_labels |> dplyr::select(community, label)
-    agg_data <- dplyr::left_join(agg_data, comm_labels, by = "community")
-    agg_data <- agg_data |> 
-      dplyr::mutate(community_label = ifelse(!is.na(label), 
-                                             paste0("No. ", community, ": ",
-                                                    label, " [n_posts=", n_comm_posts, "]")) 
-      )
+  # Insert generated labels
+  if ("community_labels" %in% names(network_data)) {
+    labs <- data.table::as.data.table(network_data$community_labels)
+    labs[, community := as.character(community)]
+    agg <- merge(agg, labs[,.(community,label)], by="community", all.x=TRUE)
+    agg[!is.na(label), community_label := paste0("No. ", community, ": ", label, " [n_posts=", n_comm_posts, "]")]
   }
   
-  # Order community_label factor
-  agg_data$community_label <- factor(agg_data$community_label)
-  new_levels <- levels(agg_data$community_label)[order(-comm_post_stats_dt |> dplyr::arrange(as.character(community)) |> magrittr::extract2("n_comm_posts"))]  # Negative sign for descending order
-  agg_data$community_label <- factor(agg_data$community_label, levels = new_levels)
+  # Order labels
+  data.table::setorder(agg, -n_comm_posts, community)
+  agg[, community_label := factor(community_label, levels = unique(community_label))]
   
-  # Find indicator for peaking moments per community
-  agg_data_max <- agg_data[, .SD[which.max(N)], by = community]
-  
-  # Harmonize types
-  if(!identical(class(agg_data_max$community), class(agg_data$community))){
-    agg_data_max$community <- as.numeric(agg_data_max$community)
-    agg_data$community <- as.numeric(agg_data$community)
-  }
-  
-  # Bind to agg_data
-  agg_data <- dplyr::left_join(agg_data, 
-                               agg_data_max |> dplyr::mutate(local_max = 1) |>  
-                                 dplyr::select(community, time_floored, local_max)) |> 
-    dplyr::distinct()
-  
-  if(include_examples){  
-    if(verbose)cli::cli_inform("Sampling examples.")
-    sim_dt <- data.table::copy(network_data$sim_dt)
-    sim_dt[, time_floored := lubridate::floor_date(lubridate::as_datetime(time), unit = unit)]
+  # Combined plot
+  if (!by_community) {
+    p <- ggplot2::ggplot(agg, ggplot2::aes(x = time_floored, y = N,
+                                           color = community, group = community)) +
+      ggplot2::geom_line(linewidth=0.8, alpha=0.9) +
+      ggplot2::scale_color_manual(values = cols) +
+      ggplot2::scale_x_datetime(breaks = "1 day", date_labels = "%b %d") +
+      ggplot2::labs(title=title, caption=caption, x="Time", y="Number of coordinated posts") +
+      ggplot2::theme_minimal(base_size=base_size) +
+      ggplot2::theme(axis.text.x = ggplot2::element_text(angle=30,hjust=1),
+                     plot.caption = ggplot2::element_text(hjust=0))
     
-    # Filter max week per community
-    sim_dt_local_max <- sim_dt[community == community_y][agg_data_max, on = .(community, time_floored)]
-    
-    # Find pairs where both are in one community and find pair with strongest edge weight
-    sim_dt_local_max <- sim_dt_local_max[
-      , edge_key := paste0(pmin(account_id, account_id_y), "_", pmax(account_id, account_id_y))
-    ][
-      , weight := .N, by = edge_key
-    ][
-      order(-weight)
-    ][
-      , utils::head(.SD, n_examples), by = .(community, time_floored)
-    ]
-    
-    # Ensure unique mapping for account_id
-    dt_unique <- unique(dt[, .(account_id, account_name)])
-    
-    # Join for account_id
-    sim_dt_local_max <- merge(sim_dt_local_max,dt_unique,by = "account_id",all.x = TRUE)
-    
-    # Join for account_id_y
-    sim_dt_local_max <- merge(sim_dt_local_max,
-                              dt_unique[, .(account_id_y = account_id, account_name_y = account_name)],
-                              by = "account_id_y",all.x = TRUE)
-    
-    
-    sim_dt_local_max[, examples := paste0(
-      "[sim: ", round(similarity, 2), " | diff: ", time_diff, "]\n",
-      "@", sub("^@", "", account_name), ": ", 
-      stringr::str_trunc(content, trunc, side = "right") |> 
-        stringr::str_squish() |> 
-        (\(x) if (is.numeric(wrap)) stringr::str_wrap(x, width = wrap) else x)(),
-      "\n@", sub("^@", "", account_name_y), ": ", 
-      stringr::str_trunc(content_y, trunc, side = "right") |> 
-        stringr::str_squish() |> 
-        (\(x) if (is.numeric(wrap)) stringr::str_wrap(x, width = wrap) else x)()
-    )]
-    
-    
-    
-    # Aggregate by community, concatenate the examples into a single string separated by newlines
-    aggregated_examples <- sim_dt_local_max[, .(examples = paste(examples, collapse = "\n\n")), by = community]
-    
-    # Save example times
-    aggregated_examples <- dplyr::left_join(aggregated_examples, sim_dt_local_max[, .(community, time_floored)]) |> dplyr::distinct()
-    
-    # Bind to agg_data
-    if(!identical(class(aggregated_examples$community), class(agg_data$community))){
-      aggregated_examples$community <- as.numeric(aggregated_examples$community)
-      agg_data$community <- as.numeric(agg_data$community)
-    }
-    
-    agg_data <- dplyr::left_join(agg_data, aggregated_examples) 
-    
-  }
-  
-  # Get community size stats as character
-  filter_info <- paste0("Community members: min=", min(comm_stats_dt$N, na.rm = T),
-                        ", max=", max(comm_stats_dt$N, na.rm = T),
-                        ", mean=", round(mean(comm_stats_dt$N, na.rm = T),1),
-                        "(", round(stats::sd(comm_stats_dt$N, na.rm = T),1), ").")
-  
-  
-  # Condition A: Plot one plot (community differentiated by color)
-  
-  if(by_communtiy == FALSE){
-    
-    # Plot: Create a ggplot geom_bar plot, showing the number of observations per community per time_floored
-    p <- agg_data |> 
-      ggplot2::ggplot(ggplot2::aes(x = time_floored, 
-                                   y = N, 
-                                   fill = factor(community))) +
-      ggplot2::geom_bar(stat = "identity", position = "stack") +  # Stacked bar chart
-      ggplot2::scale_x_datetime(breaks = "1 day", date_labels = "%b %d") +  # Adjust x-axis breaks and labels
-      ggplot2::labs(title = title,
-                    #  subtitle = filter_info,
-                    caption =  caption,
-                    y = "Number of Coordinated Posts",
-                    x = "Time",
-                    fill = "Community") +
-      ggplot2::theme_minimal() +
-      ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, vjust = 1, hjust = 1))+
-      ggplot2::scale_fill_manual(values = community_colors)
-    
-    
-    if("examples" %in% names(agg_data) && include_examples){
-      
-      if(verbose)cli::cli_inform("Adding examples.")
-      
-      # Add the text with ggrepel::geom_text_repel()
-      p <-  p +
-        ggrepel::geom_text_repel(data = agg_data |> dplyr::filter(!is.na(local_max)) |> dplyr::distinct(),
-                                 ggplot2::aes(x = time_floored, 
-                                              y = N, 
-                                              label = paste(as.character(community_label),
-                                                            examples,
-                                                            sep = "\n")#,
-                                              #color = factor(community_label)
-                                 ), 
-                                 size = fontsize,  # Reduce text size
-                                 box.padding = 4,  # Increase padding between text and box
-                                 point.padding = 2,  # Add more padding between points and labels
-                                 min.segment.length = 0,  # Always show the line
-                                 #        segment.color = community_colors, 
-                                 nudge_y = log(agg_data |> dplyr::filter(!is.na(local_max)) |> magrittr::extract2("N"))+10,  # Dynamically move the text higher based on N values
-                                 nudge_x = 100,  # Adjust horizontal nudging to move labels away
-                                 force = 40,  # Further increase separation force
-                                 force_pull = 20,  # Pull labels more away from dense areas
-                                 segment.curvature = -0.3,  # Add curvature to the lines
-                                 segment.angle = 10,  # Angle of the curve
-                                 segment.ncp = 5,  # More control points for a smoother curve
-                                 max.overlaps = 20,  # Allow more overlaps for better text separation
-                                 hjust = 0,  # Right-align the text at the end of the curve
-                                 vjust = 0) #+
-      #     ggplot2::scale_color_manual(values = community_colors, guide = "none")# Center-align the text vertically
-      
-    }
-    
-    if(!"examples" %in% names(agg_data)){
-      
-      if(add_labels){
-        if(verbose)cli::cli_inform("Adding labels.")
-        p <- p +
-          ggrepel::geom_text_repel(data = agg_data |> dplyr::filter(!is.na(local_max)),
-                                   ggplot2::aes(x = time_floored, 
-                                                y = N, 
-                                                label = community_label,
-                                                color = community_label
-                                   ), 
-                                   size = fontsize,  # Reduce text size
-                                   box.padding = 1,  # Increase padding between text and box
-                                   point.padding = .5,  # Add more padding between points and labels
-                                   min.segment.length = 0,  # Always show the line
-                                   # segment.color = "black",  
-                                   nudge_y = log(agg_data |> dplyr::filter(!is.na(local_max)) |> magrittr::extract2("N"))+10,  # Dynamically move the text higher based on N values
-                                   nudge_x = 10,  # Adjust horizontal nudging to move labels away
-                                   force = 20,  # Further increase separation force
-                                   force_pull = 10,  # Pull labels more away from dense areas
-                                   segment.curvature = -0.3,  # Add curvature to the lines
-                                   segment.angle = 10,  # Angle of the curve
-                                   segment.ncp = 5,  # More control points for a smoother curve
-                                   max.overlaps = 20,  # Allow more overlaps for better text separation
-                                   hjust = 1,  # Right-align the text at the end of the curve
-                                   vjust = .5, 
-                                   ylim = c(max(agg_data$N), min(agg_data$N)),
-                                   xlim = c(min(agg_data$time_floored), max(agg_data$time_floored))
-          )+
-          ggplot2::scale_color_manual(values = community_colors, guide = "none")
-        
-      }
-      
-    }
-    
-    if(!legend) p <- p + ggplot2::theme(legend.position = "none")
-    
+    if (!legend) p <- p + ggplot2::theme(legend.position="none")
     
   }else{
     
-    if (verbose) cli::cli_inform("Plotting each community individually with text panels.")
+    # Per-community panels
+    if (verbose) cli::cli_inform("Plotting individual communities.")
     
-    plots <- list()
+    # Fill missing time bins
+    all_times <- sort(unique(agg$time_floored))
+    grid <- data.table::CJ(community = unique_comms, time_floored = all_times, unique=TRUE)
+    agg2 <- merge(grid, agg, by=c("community","time_floored"), all.x=TRUE)
+    agg2[is.na(N), N := 0L]
     
-    for (comm in unique_communities) {
-      
-      # Ensure complete time series per community by filling in missing (community, time_floored) combinations
-      all_times <- unique(agg_data$time_floored)
-      all_comms <- unique(agg_data$community)
-      template_dt <- data.table::CJ(community = all_comms, time_floored = all_times, unique = TRUE)
-      
-      # Merge with agg_data and fill in missing N with 0
-      agg_data_all <- merge(template_dt, agg_data, by = c("community", "time_floored"), all.x = TRUE)
-      
-      # Replace NA in N with 0
-      agg_data_all[is.na(N), N := 0]
-      
-      # Filter data for current community
-      sub_data <- agg_data_all[community == comm]
-      
-      # Plot bar chart for this community
-      bar_plot <- ggplot2::ggplot(sub_data, ggplot2::aes(x = time_floored, y = N)) +
-        ggplot2::geom_bar(stat = "identity", fill = community_colors[as.character(comm)]) +
-        ggplot2::scale_x_datetime(breaks = "1 day", date_labels = "%b %d") +
-        ggplot2::labs(
-          title = "",
-          y = "n posts",
-          x = "time"
-        ) +
-        ggplot2::theme_minimal() +
-        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1))
-      
-      if ("examples" %in% names(sub_data) && include_examples && !all(is.na(sub_data$examples))) {
-        
-        example_text <- unique(sub_data[!is.na(examples), .(examples)])$examples |> 
-          stringr::str_replace_all("\\[", "*[") |> 
-          stringr::str_replace_all("\\]", "]*")
-        
-        example_text <- paste0(
-          "**",
-          unique(sub_data[!is.na(community_label), .(community_label)])$community_label |> 
-            stringr::str_remove_all("\\[.*") |> trimws(),
-          "** ", "*[ n_posts: ", 
-          unique(sub_data[!is.na(n_comm_posts), .(n_comm_posts)])$n_comm_posts, " ]*",
-          "\n\n",
-          example_text
-        )
-        
-      } else if ("label" %in% names(community_label)) {
-        
-        example_text <- paste0(
-          "**",
-          unique(sub_data[!is.na(community_label), .(community_label)])$community_label |> 
-            stringr::str_remove_all("\\[.*")|> trimws(),
-          "**\n",
-          "*[ n_posts: ", 
-          unique(sub_data[!is.na(n_comm_posts), .(n_comm_posts)])$n_comm_posts, " ]*"
-        )
-        
-        
-      } else {
-        example_text <- paste0("Community ", comm)
-      }
-      
-      # Replace linebreaks to markdown breaks
-      example_text <- stringr::str_replace_all(example_text, "\n", "<br>")
-      
-      
-      # Text panel
-      text_plot <- ggplot2::ggplot() +
-        ggtext::geom_textbox(
-          data = data.frame(x = 0, y = 1, label = example_text,
-                            markdown = TRUE ),
-          ggplot2::aes(x = x, y = y, label = label),
-          box.color = NA, fill = NA,
-          hjust = 0, vjust = 1,
-          size = fontsize / ggplot2::.pt,
-          lineheight = .8,
-          width = grid::unit(.95, "npc"),
-          halign = 0
-        ) +
-        ggplot2::xlim(0, 1) + ggplot2::ylim(0, 1) +
-        ggplot2::theme_void()
-      
-      # Combine into patchwork
-      combined_plot <- patchwork::wrap_plots(bar_plot, text_plot, ncol = 2, widths = c(1, 1))
-      
-      plots[[length(plots) + 1]] <- combined_plot
-      
-    }
+    plots <- lapply(unique_comms, function(comm){
+      sub <- agg2[community == comm]
+      ggplot2::ggplot(sub, ggplot2::aes(x=time_floored, y=N)) +
+        ggplot2::geom_line(linewidth=0.9, color=cols[[comm]]) +
+        ggplot2::scale_x_datetime(breaks="1 day", date_labels="%b %d") +
+        ggplot2::labs(title=paste0("Community ", comm),
+                      x="Time", y="Number of coordinated posts") +
+        ggplot2::theme_minimal(base_size=base_size) +
+        ggplot2::theme(axis.text.x = ggplot2::element_text(angle=30, hjust=1))
+    })
     
-    # Combine all communities into one patchwork grid
-    p <- patchwork::wrap_plots(plots, ncol = ncol) +
+    p <- patchwork::wrap_plots(plots, ncol=ncol) +
       patchwork::plot_annotation(
         title = title,
         caption = caption,
         theme = ggplot2::theme(
-          plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0),
-          plot.caption = ggplot2::element_text(size = 9, hjust = 0)
+          plot.title   = ggplot2::element_text(size=14,face="bold",hjust=0),
+          plot.caption = ggplot2::element_text(size=9,hjust=0)
         )
       )
-    
-    
   }
   
   return(p)
-  
 }
-
 
 
 
