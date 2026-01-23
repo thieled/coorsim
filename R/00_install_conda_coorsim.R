@@ -51,32 +51,52 @@ install_torch <- function(python_path = NULL,
     }
   }
   
-  # Detect GPU availability
+  # Detect GPU availability (NVIDIA)
   check_gpu <- function() {
     if (.Platform$OS.type == "windows") {
       gpu_info <- try(system("wmic path win32_VideoController get name", intern = TRUE), silent = TRUE)
-      return(any(grepl("NVIDIA", gpu_info, ignore.case = TRUE)))
-    } else {
-      gpu_info <- try(system("nvidia-smi", intern = TRUE), silent = TRUE)
-      return(!inherits(gpu_info, "try-error") && length(gpu_info) > 0)
+      return(!inherits(gpu_info, "try-error") && any(grepl("NVIDIA", gpu_info, ignore.case = TRUE)))
     }
+    
+    # Linux / Unix: prefer nvidia-smi presence + successful query
+    out <- try(system("nvidia-smi -L", intern = TRUE), silent = TRUE)
+    !inherits(out, "try-error") && length(out) > 0
   }
   
-  # Detect CUDA availability
+  # Detect CUDA availability (driver-level; no toolkit, no torch)
   check_cuda <- function() {
-    cuda_check <- try(system("nvcc --version", intern = TRUE), silent = TRUE)
-    return(!inherits(cuda_check, "try-error") && any(grepl("release", cuda_check, ignore.case = TRUE)))
+    if (.Platform$OS.type == "windows") {
+      # On Windows, rely on nvidia-smi if available; fall back to GPU presence
+      out <- try(system("nvidia-smi -L", intern = TRUE), silent = TRUE)
+      if (!inherits(out, "try-error") && length(out) > 0) return(TRUE)
+      return(check_gpu())
+    }
+    
+    out <- try(system("nvidia-smi -L", intern = TRUE), silent = TRUE)
+    !inherits(out, "try-error") && length(out) > 0
   }
   
-  # Get CUDA version
+  # Get CUDA version (driver-reported CUDA version via nvidia-smi; no nvcc)
   get_cuda_version <- function() {
-    nvcc_output <- tryCatch(system("nvcc --version", intern = TRUE), error = function(e) NULL)
-    if (!is.null(nvcc_output)) {
-      version_line <- nvcc_output[stringr::str_detect(nvcc_output, "release")]
-      return(stringr::str_extract(version_line, "\\d+\\.\\d+"))
+    if (.Platform$OS.type == "windows") {
+      out <- try(system("nvidia-smi", intern = TRUE), silent = TRUE)
+      if (inherits(out, "try-error") || length(out) == 0) return(NULL)
+    } else {
+      out <- try(system("nvidia-smi", intern = TRUE), silent = TRUE)
+      if (inherits(out, "try-error") || length(out) == 0) return(NULL)
     }
-    return(NULL)
+    
+    line <- out[grepl("CUDA Version", out, ignore.case = TRUE)]
+    if (length(line) == 0) return(NULL)
+    
+    # Extract the CUDA version reported by the driver, e.g. "CUDA Version: 12.2"
+    m <- regexec("CUDA Version:\\s*([0-9]+\\.[0-9]+)", line[1])
+    regm <- regmatches(line[1], m)
+    if (length(regm) == 0 || length(regm[[1]]) < 2) return(NULL)
+    
+    regm[[1]][2]
   }
+  
   
   # Construct PyTorch installation URL
   construct_pytorch_install_url <- function(cuda_version) {
@@ -144,7 +164,8 @@ install_torch <- function(python_path = NULL,
   # Install PyTorch with reticulate::py_install()
   tryCatch({
     reticulate::py_install(
-      packages = c("torch", "torchvision", "torchaudio"),
+      packages = c("torch", "torchvision", "torchaudio"
+                   ),
       pip = TRUE,
       envname = conda_env,
       python_version = NULL,  # Keep Conda Python version fixed
