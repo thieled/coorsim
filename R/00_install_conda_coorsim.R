@@ -76,20 +76,18 @@ install_torch <- function(python_path = NULL,
     !inherits(out, "try-error") && length(out) > 0
   }
   
-  # Get CUDA version (driver-reported CUDA version via nvidia-smi; no nvcc)
+  
+  # Get CUDA version (driver-reported via nvidia-smi) + GPU name (for arch-specific overrides)
   get_cuda_version <- function() {
-    if (.Platform$OS.type == "windows") {
-      out <- try(system("nvidia-smi", intern = TRUE), silent = TRUE)
-      if (inherits(out, "try-error") || length(out) == 0) return(NULL)
-    } else {
-      out <- try(system("nvidia-smi", intern = TRUE), silent = TRUE)
-      if (inherits(out, "try-error") || length(out) == 0) return(NULL)
-    }
+    # Only meaningful on systems with nvidia-smi; keep Windows branch but same logic
+    out <- try(system("nvidia-smi", intern = TRUE), silent = TRUE)
+    if (inherits(out, "try-error") || length(out) == 0) return(NULL)
     
     line <- out[grepl("CUDA Version", out, ignore.case = TRUE)]
-    if (length(line) == 0) return(NULL)
+    if (length(line) == 0) return(NULL
+                                  
+    )
     
-    # Extract the CUDA version reported by the driver, e.g. "CUDA Version: 12.2"
     m <- regexec("CUDA Version:\\s*([0-9]+\\.[0-9]+)", line[1])
     regm <- regmatches(line[1], m)
     if (length(regm) == 0 || length(regm[[1]]) < 2) return(NULL)
@@ -97,15 +95,60 @@ install_torch <- function(python_path = NULL,
     regm[[1]][2]
   }
   
+  # Internal: detect NVIDIA GPU name (no torch, no nvcc)
+  get_nvidia_gpu_name <- function() {
+    if (.Platform$OS.type == "windows") {
+      # Best-effort: prefer nvidia-smi if present, otherwise wmic
+      out <- try(system("nvidia-smi --query-gpu=name --format=csv,noheader", intern = TRUE), silent = TRUE)
+      if (!inherits(out, "try-error") && length(out) > 0) return(trimws(out[1]))
+      
+      out2 <- try(system("wmic path win32_VideoController get name", intern = TRUE), silent = TRUE)
+      if (inherits(out2, "try-error") || length(out2) == 0) return(NULL)
+      # Drop header line if present
+      out2 <- trimws(out2)
+      out2 <- out2[nzchar(out2)]
+      out2 <- out2[!grepl("^name$", out2, ignore.case = TRUE)]
+      if (length(out2) == 0) return(NULL)
+      return(out2[1])
+    }
+    
+    out <- try(system("nvidia-smi --query-gpu=name --format=csv,noheader", intern = TRUE), silent = TRUE)
+    if (inherits(out, "try-error") || length(out) == 0) return(NULL)
+    trimws(out[1])
+  }
   
-  # Construct PyTorch installation URL
+  # Internal: choose PyTorch CUDA wheel tag, guarding against Pascal (P100 / sm_60) incompatibility
+  choose_pytorch_cuda_tag <- function(cuda_version, gpu_name = NULL) {
+    # No driver / no CUDA -> CPU wheels
+    if (is.null(cuda_version)) return("cpu")
+    
+    # Arch guard: Pascal GPUs (e.g., Tesla P100 = sm_60) require cu126 wheels with current PyTorch binaries.
+    # We detect by GPU name (no torch, no nvcc).
+    if (!is.null(gpu_name) && grepl("\\bP100\\b", gpu_name, ignore.case = TRUE)) {
+      return("cu126")
+    }
+    
+    # Default mapping by driver-reported CUDA version (best-effort, conservative).
+    # PyTorch wheel tags are cu126 / cu128 / cu130 (not cu122).
+    # - if driver >= 13.0 -> prefer cu130
+    # - else if driver >= 12.8 -> prefer cu128
+    # - else -> cu126 (widest compatibility)
+    v <- suppressWarnings(as.numeric(cuda_version))
+    if (is.na(v)) return("cpu")
+    
+    if (v >= 13.0) return("cu130")
+    if (v >= 12.8) return("cu128")
+    "cu126"
+  }
+  
+  # Construct PyTorch installation URL (with Pascal-safe override)
   construct_pytorch_install_url <- function(cuda_version) {
     base_url <- "https://download.pytorch.org/whl/"
-    if (is.null(cuda_version)) {
-      return(paste0(base_url, "cpu"))
-    } else {
-      return(paste0(base_url, "cu", gsub("\\.", "", cuda_version)))
-    }
+    
+    gpu_name <- get_nvidia_gpu_name()
+    tag <- choose_pytorch_cuda_tag(cuda_version = cuda_version, gpu_name = gpu_name)
+    
+    paste0(base_url, tag)
   }
   
   # Validate URL by checking HTTP response
