@@ -16,7 +16,8 @@ plot_communities(
   ncol = 2,
   expand_hairballs = NULL,
   use_palette = NULL,
-  use_order = NULL
+  use_order = NULL,
+  graph_layout = "stress"
 )
 }
 \arguments{
@@ -47,6 +48,10 @@ and a node table (`network_data$node_list`, coercible to a tibble). Optionally i
 \item{use_palette}{Optional palette: function(n) or character vector of hex colors.}
 
 \item{use_order}{Optional vector specifying the order in which communities are plotted.}
+
+\item{graph_layout}{Character. The graph layout algorithm passed
+to ggraph::create_layout(). Defaults to `"stress"`. Other options include "fr", "kk",
+"graphopt", and "lgl".}
 }
 \value{
 A ggplot or patchwork object.
