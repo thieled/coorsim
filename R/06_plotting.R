@@ -252,7 +252,10 @@ plot_posts <- function(network_data,
 #' @param expand_hairballs Numeric. Factor to visually expand dense communities.
 #' @param use_palette Optional palette: function(n) or character vector of hex colors.
 #' @param use_order Optional vector specifying the order in which communities are plotted.
-#'
+#' @param graph_layout Character. The graph layout algorithm passed
+#'   to ggraph::create_layout(). Defaults to `"stress"`. Other options include "fr", "kk",
+#'   "graphopt", and "lgl".
+#'   
 #' @return A ggplot or patchwork object.
 #' @export
 plot_communities <- function(network_data, 
@@ -266,7 +269,8 @@ plot_communities <- function(network_data,
                              ncol = 2,
                              expand_hairballs = NULL,
                              use_palette = NULL,
-                             use_order = NULL) {
+                             use_order = NULL,
+                             graph_layout = "stress") {
   
   required_pkgs <- c(
     "ggraph", "patchwork", "ggplot2", "igraph",
@@ -410,7 +414,7 @@ plot_communities <- function(network_data,
     ] |> as.data.frame()
   }
   
-  layout <- ggraph::create_layout(tidy_g, layout = "stress") |>
+  layout <- ggraph::create_layout(tidy_g, layout = graph_layout) |>
     dplyr::select(-dplyr::any_of("N")) |>
     dplyr::mutate(community = as.character(community)) |>
     dplyr::left_join(comm_df |> dplyr::mutate(community = as.character(community)), by = "community")
