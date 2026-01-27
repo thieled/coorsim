@@ -256,6 +256,7 @@ plot_posts <- function(network_data,
 #'   to ggraph::create_layout(). Defaults to `"stress"`. Other options include "fr", "kk",
 #'   "graphopt", and "lgl".
 #' @param check_overlap Logical. Check overlap when plotting node names? Passed on to `ggraph::geom_node_text()`.
+#' @param add_node_names Logical. Whether to add node name labels to the plot. Default is `TRUE`.
 #' 
 #' @return A ggplot or patchwork object.
 #' @export
@@ -272,7 +273,8 @@ plot_communities <- function(network_data,
                              use_palette = NULL,
                              use_order = NULL,
                              graph_layout = "stress",
-                             check_overlap = FALSE) {
+                             check_overlap = FALSE,
+                             add_node_names = TRUE) {
   
   required_pkgs <- c(
     "ggraph", "patchwork", "ggplot2", "igraph",
@@ -453,14 +455,20 @@ plot_communities <- function(network_data,
                      color = as.factor(community)),
         concavity = 2,
         alpha = 0.07,
-        label.fontsize = label_fontsize) +
-      ggraph::geom_node_text(
-        data = layout |> dplyr::filter(account_name %in% top_nodes$account_name),
-        ggplot2::aes(label = account_name,  
-                     size = sqrt(degree) * 0.5),  #log(degree)*10),
-        repel = TRUE, 
-        check_overlap = check_overlap
-      ) +
+        label.fontsize = label_fontsize)
+    
+    if (add_node_names) {
+      p <- p +
+        ggraph::geom_node_text(
+          data = layout |> dplyr::filter(account_name %in% top_nodes$account_name),
+          ggplot2::aes(label = account_name,  
+                       size = sqrt(degree) * 0.5),  #log(degree)*10),
+          repel = TRUE, 
+          check_overlap = check_overlap
+        )
+    }
+    
+    p <- p +
       ggplot2::scale_color_manual(values = community_colors) +
       ggplot2::scale_fill_manual(values = community_colors, guide = "none") +
       ggplot2::scale_alpha_continuous(range = c(0.1, 0.9)) +
@@ -503,15 +511,21 @@ plot_communities <- function(network_data,
                                              color = as.factor(community)),
                                 concavity = 1, 
                                 alpha = 0.05, 
-                                radius = grid::unit(2, "pt")) +
-        ggraph::geom_node_text(
-          data = sub_layout |> dplyr::filter(account_name %in% top_nodes$account_name),
-          ggplot2::aes(label = account_name,  
-                       size = sqrt(degree) * 0.5), 
-          check_overlap = check_overlap, 
-          repel = TRUE, 
-          show.legend = FALSE
-        )  +
+                                radius = grid::unit(2, "pt"))
+      
+      if (add_node_names) {
+        g_plot <- g_plot +
+          ggraph::geom_node_text(
+            data = sub_layout |> dplyr::filter(account_name %in% top_nodes$account_name),
+            ggplot2::aes(label = account_name,  
+                         size = sqrt(degree) * 0.5), 
+            check_overlap = check_overlap, 
+            repel = TRUE, 
+            show.legend = FALSE
+          )
+      }
+      
+      g_plot <- g_plot +
         ggplot2::scale_color_manual(values = community_colors) +
         ggplot2::scale_fill_manual(values = community_colors, guide = "none") +
         ggplot2::scale_alpha_continuous(range = c(0.1, 0.9)) +
