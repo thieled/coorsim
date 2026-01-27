@@ -17,7 +17,8 @@ plot_communities(
   expand_hairballs = NULL,
   use_palette = NULL,
   use_order = NULL,
-  graph_layout = "stress"
+  graph_layout = "stress",
+  check_overlap = FALSE
 )
 }
 \arguments{
@@ -52,6 +53,8 @@ and a node table (`network_data$node_list`, coercible to a tibble). Optionally i
 \item{graph_layout}{Character. The graph layout algorithm passed
 to ggraph::create_layout(). Defaults to `"stress"`. Other options include "fr", "kk",
 "graphopt", and "lgl".}
+
+\item{check_overlap}{Logical. Check overlap when plotting node names? Passed on to `ggraph::geom_node_text()`.}
 }
 \value{
 A ggplot or patchwork object.

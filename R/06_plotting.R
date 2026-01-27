@@ -255,7 +255,8 @@ plot_posts <- function(network_data,
 #' @param graph_layout Character. The graph layout algorithm passed
 #'   to ggraph::create_layout(). Defaults to `"stress"`. Other options include "fr", "kk",
 #'   "graphopt", and "lgl".
-#'   
+#' @param check_overlap Logical. Check overlap when plotting node names? Passed on to `ggraph::geom_node_text()`.
+#' 
 #' @return A ggplot or patchwork object.
 #' @export
 plot_communities <- function(network_data, 
@@ -270,7 +271,8 @@ plot_communities <- function(network_data,
                              expand_hairballs = NULL,
                              use_palette = NULL,
                              use_order = NULL,
-                             graph_layout = "stress") {
+                             graph_layout = "stress",
+                             check_overlap = FALSE) {
   
   required_pkgs <- c(
     "ggraph", "patchwork", "ggplot2", "igraph",
@@ -454,8 +456,10 @@ plot_communities <- function(network_data,
         label.fontsize = label_fontsize) +
       ggraph::geom_node_text(
         data = layout |> dplyr::filter(account_name %in% top_nodes$account_name),
-        ggplot2::aes(label = account_name,  size = log(degree)*10),
-        repel = TRUE
+        ggplot2::aes(label = account_name,  
+                     size = sqrt(degree) * 0.5),  #log(degree)*10),
+        repel = TRUE, 
+        check_overlap = check_overlap
       ) +
       ggplot2::scale_color_manual(values = community_colors) +
       ggplot2::scale_fill_manual(values = community_colors, guide = "none") +
@@ -504,7 +508,7 @@ plot_communities <- function(network_data,
           data = sub_layout |> dplyr::filter(account_name %in% top_nodes$account_name),
           ggplot2::aes(label = account_name,  
                        size = sqrt(degree) * 0.5), 
-          check_overlap = TRUE,
+          check_overlap = check_overlap, 
           repel = TRUE, 
           show.legend = FALSE
         )  +
