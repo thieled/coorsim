@@ -18,7 +18,8 @@ plot_communities(
   use_palette = NULL,
   use_order = NULL,
   graph_layout = "stress",
-  check_overlap = FALSE
+  check_overlap = FALSE,
+  add_node_names = TRUE
 )
 }
 \arguments{
@@ -55,6 +56,8 @@ to ggraph::create_layout(). Defaults to `"stress"`. Other options include "fr", 
 "graphopt", and "lgl".}
 
 \item{check_overlap}{Logical. Check overlap when plotting node names? Passed on to `ggraph::geom_node_text()`.}
+
+\item{add_node_names}{Logical. Whether to add node name labels to the plot. Default is `TRUE`.}
 }
 \value{
 A ggplot or patchwork object.
