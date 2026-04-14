@@ -642,6 +642,10 @@ slice_community_text <- function(groups_data,
 #' Defaults to \code{examples$example_comm_slices_answer}.
 #' @param schema Optional JSON-like list defining the expected structured output format.
 #' Defaults to \code{schemata$schema_comm}.
+#' @param calculate_stats Logical. Whether to calculate community statistics 
+#' from \code{post_data} (number of posts, accounts, and predominant language). 
+#' Set to \code{FALSE} to skip processing of \code{groups_data$post_data} for 
+#' efficiency in prompt evaluation pipelines. Default is \code{TRUE}.
 #' @param verbose Logical. Whether to print progress messages, retry information,
 #' and aggregation updates. Default is \code{TRUE}.
 #'
@@ -700,6 +704,7 @@ label_communities <- function(groups_data,
                               answer = NULL,
                               answer_slices = NULL,
                               schema = NULL,
+                              calculate_stats = TRUE,
                               verbose = TRUE) {
   
   if (!"user_labels" %in% names(groups_data)) {
@@ -755,19 +760,23 @@ label_communities <- function(groups_data,
     schema_comm <- schema
   }
   
-  # Calculate comm stats
-  post_data <- data.table::copy(groups_data$post_data)
-  comm_stats <- post_data[, .(
-    n_posts = data.table::uniqueN(post_id),
-    n_accs = data.table::uniqueN(account_id)
-  ), by = community]
-  
-  user_labels <- data.table::copy(groups_data$user_labels)
-  top_lang <- user_labels[, .N, by = .(community, lang)][
-    order(-N), .SD[1], by = community
-  ][, .(community, lang)]
-  
-  comm_stats <- top_lang[comm_stats, on = "community"]
+  # Calculate comm stats (optional)
+  if (calculate_stats) {
+    post_data <- data.table::copy(groups_data$post_data)
+    comm_stats <- post_data[, .(
+      n_posts = data.table::uniqueN(post_id),
+      n_accs = data.table::uniqueN(account_id)
+    ), by = community]
+    
+    user_labels <- data.table::copy(groups_data$user_labels)
+    top_lang <- user_labels[, .N, by = .(community, lang)][
+      order(-N), .SD[1], by = community
+    ][, .(community, lang)]
+    
+    comm_stats <- top_lang[comm_stats, on = "community"]
+  } else {
+    comm_stats <- NULL
+  }
   
   # Bind user texts to community texts
   comm_texts <-  slice_community_text(
@@ -1094,13 +1103,24 @@ label_communities <- function(groups_data,
     res_dt <- unsliced_dt[, text := text_slice][, c("text_slice", "id", "slice", "n", "N") := NULL]
   }
   
-  res_dt <- merge(res_dt, comm_stats, by = "community", all.x = T)
+  # Merge comm stats if calculated
+  if (!is.null(comm_stats)) {
+    res_dt <- merge(res_dt, comm_stats, by = "community", all.x = TRUE)
+    
+    # Define column order with stats
+    main_cols <- c(
+      "community", "n_accs", "n_posts", "sum_user_share_comm",
+      "label", "description"
+    )
+  } else {
+    # Define column order without stats
+    main_cols <- c(
+      "community", "sum_user_share_comm",
+      "label", "description"
+    )
+  }
   
   # Define your preferred column order
-  main_cols <- c(
-    "community", "n_accs", "n_posts", "sum_user_share_comm",
-    "label", "description"
-  )
   end_cols <- c(
     "is_valid_json", "response", "text",
     "model", "model_queried_at", "model_total_duration"
