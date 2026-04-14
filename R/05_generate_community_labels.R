@@ -642,10 +642,6 @@ slice_community_text <- function(groups_data,
 #' Defaults to \code{examples$example_comm_slices_answer}.
 #' @param schema Optional JSON-like list defining the expected structured output format.
 #' Defaults to \code{schemata$schema_comm}.
-#' @param calculate_stats Logical. Whether to calculate community statistics 
-#' from \code{post_data} (number of posts, accounts, and predominant language). 
-#' Set to \code{FALSE} to skip processing of \code{groups_data$post_data} for 
-#' efficiency in prompt evaluation pipelines. Default is \code{TRUE}.
 #' @param verbose Logical. Whether to print progress messages, retry information,
 #' and aggregation updates. Default is \code{TRUE}.
 #'
@@ -704,7 +700,6 @@ label_communities <- function(groups_data,
                               answer = NULL,
                               answer_slices = NULL,
                               schema = NULL,
-                              calculate_stats = TRUE,
                               verbose = TRUE) {
   
   if (!"user_labels" %in% names(groups_data)) {
@@ -760,23 +755,19 @@ label_communities <- function(groups_data,
     schema_comm <- schema
   }
   
-  # Calculate comm stats (optional)
-  if (calculate_stats) {
-    post_data <- data.table::copy(groups_data$post_data)
-    comm_stats <- post_data[, .(
-      n_posts = data.table::uniqueN(post_id),
-      n_accs = data.table::uniqueN(account_id)
-    ), by = community]
-    
-    user_labels <- data.table::copy(groups_data$user_labels)
-    top_lang <- user_labels[, .N, by = .(community, lang)][
-      order(-N), .SD[1], by = community
-    ][, .(community, lang)]
-    
-    comm_stats <- top_lang[comm_stats, on = "community"]
-  } else {
-    comm_stats <- NULL
-  }
+  # Calculate comm stats
+  post_data <- data.table::copy(groups_data$post_data)
+  comm_stats <- post_data[, .(
+    n_posts = data.table::uniqueN(post_id),
+    n_accs = data.table::uniqueN(account_id)
+  ), by = community]
+  
+  user_labels <- data.table::copy(groups_data$user_labels)
+  top_lang <- user_labels[, .N, by = .(community, lang)][
+    order(-N), .SD[1], by = community
+  ][, .(community, lang)]
+  
+  comm_stats <- top_lang[comm_stats, on = "community"]
   
   # Bind user texts to community texts
   comm_texts <-  slice_community_text(
@@ -1103,24 +1094,13 @@ label_communities <- function(groups_data,
     res_dt <- unsliced_dt[, text := text_slice][, c("text_slice", "id", "slice", "n", "N") := NULL]
   }
   
-  # Merge comm stats if calculated
-  if (!is.null(comm_stats)) {
-    res_dt <- merge(res_dt, comm_stats, by = "community", all.x = TRUE)
-    
-    # Define column order with stats
-    main_cols <- c(
-      "community", "n_accs", "n_posts", "sum_user_share_comm",
-      "label", "description"
-    )
-  } else {
-    # Define column order without stats
-    main_cols <- c(
-      "community", "sum_user_share_comm",
-      "label", "description"
-    )
-  }
+  res_dt <- merge(res_dt, comm_stats, by = "community", all.x = TRUE)
   
   # Define your preferred column order
+  main_cols <- c(
+    "community", "n_accs", "n_posts", "sum_user_share_comm",
+    "label", "description"
+  )
   end_cols <- c(
     "is_valid_json", "response", "text",
     "model", "model_queried_at", "model_total_duration"
@@ -1145,4 +1125,249 @@ label_communities <- function(groups_data,
 
 
 
-
+# Internal function: LLM-annotate community slices with minimal overhead
+#
+# @param slice_dt data.table or data.frame with one or more rows. Required columns:
+#   - text_slice: character, the JSON text to annotate
+#   - id: character, unique identifier for each slice (can be specified via id_col parameter)
+# @param id_col Character. Name of the column to use as slice identifier. Default "id".
+# @param model Character. LLM model name. Default "llama3.2:3b".
+# @param prompt Character. User prompt for annotation. If NULL, uses prompts$prompt_comm. 
+#   For custom prompts, pass your own string.
+# @param system Character. System prompt. If NULL, uses prompts$system_comm.
+#   For custom system prompts, pass your own string.
+# @param example Character vector. Few-shot examples. If NULL, uses examples$example_comm_text.
+#   For custom examples, pass your own character vector.
+# @param answer Character vector. Few-shot answers. If NULL, uses examples$example_comm_answer.
+#   For custom answers, pass your own character vector.
+# @param schema List. JSON schema for output. If NULL, uses schemata$schema_comm.
+#   For custom schema, pass your own list.
+# @param seed Integer. Random seed. Default 42.
+# @param temp Numeric. Temperature. Default 0.0.
+# @param retries Integer. Max retries. Default 3.
+# @param retry_trunc Integer. Char limit on retry. Default 4000.
+# @param verbose Logical. Print messages. Default FALSE.
+#
+# @return data.table with parsed LLM responses merged with input slice metadata
+#
+# @details All prompt parameters (prompt, system, example, answer, schema) can be customized 
+#   for prompt engineering. When NULL, they use package defaults. When provided, your custom 
+#   values are used directly without modification.
+#   
+#   The function processes each slice independently and combines results. JSON text is cleaned
+#   of tabs, linebreaks, and extra whitespace before annotation.
+#
+# @examples
+# \dontrun{
+# # With default prompts
+# result <- .label_slice(comm_slices)
+#
+# # With custom prompt and id column
+# result <- .label_slice(
+#   comm_slices,
+#   id_col = "slice_id",
+#   prompt = "Provide a 3-word label:",
+#   system = "You are a labeling expert."
+# )
+# }
+.label_slice <- function(slice_dt,
+                         id_col = "id",
+                         model = "llama3.2:3b",
+                         prompt = NULL,
+                         system = NULL,
+                         example = NULL,
+                         answer = NULL,
+                         schema = NULL,
+                         seed = 42,
+                         temp = 0.0,
+                         retries = 3,
+                         retry_trunc = 4000,
+                         verbose = FALSE) {
+  
+  # Validate input
+  if (!"text_slice" %in% names(slice_dt)) stop("slice_dt must contain 'text_slice' column")
+  if (!id_col %in% names(slice_dt)) stop(sprintf("slice_dt must contain '%s' column (specified by id_col)", id_col))
+  
+  # Ensure data.table
+  slice_dt <- data.table::as.data.table(slice_dt)
+  
+  # Rename id column to 'id' for internal use
+  if (id_col != "id") {
+    data.table::setnames(slice_dt, old = id_col, new = "id")
+  }
+  
+  # Clean text_slice: remove tabs, linebreaks, and compress whitespace
+  slice_dt[, text_slice_clean := stringr::str_replace_all(text_slice, "[\\t\\r\\n]+", " ")]
+  slice_dt[, text_slice_clean := stringr::str_squish(text_slice_clean)]
+  
+  
+  # Set defaults from package data (only if user didn't provide custom values)
+  if (is.null(prompt)) {
+    prompt_comm <- prompts$prompt_comm
+  } else {
+    prompt_comm <- prompt
+  }
+  
+  if (is.null(system)) {
+    system_comm <- prompts$system_comm
+  } else {
+    system_comm <- system
+  }
+  
+  if (is.null(example)) {
+    example_comm_text <- examples$example_comm_text
+  } else {
+    example_comm_text <- example
+  }
+  
+  if (is.null(answer)) {
+    example_comm_answer <- examples$example_comm_answer
+  } else {
+    example_comm_answer <- answer
+  }
+  
+  if (is.null(schema)) {
+    schema_comm <- schemata$schema_comm
+  } else {
+    schema_comm <- schema
+  }
+  
+  if (!requireNamespace("rollama", quietly = TRUE)) {
+    stop("Package 'rollama' is required.")
+  }
+  
+  ping_res <- try(rollama::ping_ollama(), silent = TRUE)
+  if (!ping_res[[1]]) stop("Ollama is not running.")
+  
+  example_resp <- tibble::tibble(
+    text = example_comm_text,
+    answer = example_comm_answer
+  )
+  
+  # Process each slice
+  all_results <- list()
+  
+  for (i in seq_len(nrow(slice_dt))) {
+    id <- slice_dt$id[i]
+    text <- slice_dt$text_slice_clean[i]
+    
+    if (verbose) cli::cli_inform("Processing slice {i}/{nrow(slice_dt)}: {id}")
+    
+    # Retry loop for this slice
+    res_all <- list()
+    current_text <- text
+    
+    for (retry in 0:retries) {
+      if (verbose && retry > 0) cli::cli_inform("  Retry {retry} for slice {id}...")
+      
+      queries <- rollama::make_query(
+        text = current_text,
+        template = "{prefix}\n{text}\n{prompt}",
+        prompt = prompt_comm,
+        prefix = "Annotate:",
+        system = system_comm,
+        example = example_resp
+      )
+      
+      responses <- rollama::query(
+        queries,
+        model = model,
+        screen = FALSE,
+        model_params = list(seed = seed + retry, temperature = temp + retry * (2e-2)),
+        format = schema_comm,
+        verbose = verbose
+      )
+      
+      # Parse response
+      res_df <- tibble::tibble(
+        id = id,
+        response = purrr::pluck(responses[[1]], "message", "content"),
+        model = purrr::pluck(responses[[1]], "model"),
+        model_queried_at = purrr::pluck(responses[[1]], "created_at"),
+        model_total_duration = purrr::pluck(responses[[1]], "total_duration")
+      ) |>
+        dplyr::mutate(
+          parsed_json = purrr::map(
+            response,
+            ~ tryCatch(jsonlite::fromJSON(.x), error = function(e) NULL)
+          ),
+          is_valid_json = purrr::map_lgl(response, jsonlite::validate),
+          
+          # Scalar fields
+          label = purrr::map_chr(parsed_json, ~ .x$label %||% NA_character_),
+          description = purrr::map_chr(parsed_json, ~ .x$description %||% NA_character_),
+          lang = purrr::map_chr(parsed_json, ~ .x$lang %||% NA_character_),
+          incivility = purrr::map_chr(parsed_json, ~ .x$incivility %||% NA_character_),
+          elaborate = purrr::map_chr(parsed_json, ~ .x$elaborate %||% NA_character_),
+          confidence = purrr::map_dbl(parsed_json, ~ .x$confidence %||% NA_real_)
+        ) |>
+        dplyr::mutate(
+          # Topics
+          topic = purrr::map(parsed_json, ~ base::unlist(.x$topic) %||% character()),
+          topic_1 = purrr::map_chr(topic, ~ .x[1] %||% NA_character_),
+          topic_2 = purrr::map_chr(topic, ~ .x[2] %||% NA_character_),
+          topic_3 = purrr::map_chr(topic, ~ .x[3] %||% NA_character_),
+          topic_4 = purrr::map_chr(topic, ~ .x[4] %||% NA_character_),
+          topic_5 = purrr::map_chr(topic, ~ .x[5] %||% NA_character_),
+          
+          # Repetitive patterns
+          repetitive_patterns = purrr::map(parsed_json, ~ base::unlist(.x$repetitive_patterns) %||% character()),
+          pattern_1 = purrr::map_chr(repetitive_patterns, ~ .x[1] %||% NA_character_),
+          pattern_2 = purrr::map_chr(repetitive_patterns, ~ .x[2] %||% NA_character_),
+          pattern_3 = purrr::map_chr(repetitive_patterns, ~ .x[3] %||% NA_character_),
+          
+          # Named entities
+          named_entities = purrr::map(parsed_json, ~ base::as.data.frame(.x$named_entities) %||% base::data.frame()),
+          named_entity_1 = purrr::map_chr(named_entities, ~ .x$entity[1] %||% NA_character_),
+          sentiment_1 = purrr::map_chr(named_entities, ~ .x$sentiment[1] %||% NA_character_),
+          named_entity_2 = purrr::map_chr(named_entities, ~ .x$entity[2] %||% NA_character_),
+          sentiment_2 = purrr::map_chr(named_entities, ~ .x$sentiment[2] %||% NA_character_),
+          named_entity_3 = purrr::map_chr(named_entities, ~ .x$entity[3] %||% NA_character_),
+          sentiment_3 = purrr::map_chr(named_entities, ~ .x$sentiment[3] %||% NA_character_),
+          named_entity_4 = purrr::map_chr(named_entities, ~ .x$entity[4] %||% NA_character_),
+          sentiment_4 = purrr::map_chr(named_entities, ~ .x$sentiment[4] %||% NA_character_),
+          named_entity_5 = purrr::map_chr(named_entities, ~ .x$entity[5] %||% NA_character_),
+          sentiment_5 = purrr::map_chr(named_entities, ~ .x$sentiment[5] %||% NA_character_)
+        ) |>
+        dplyr::select(-parsed_json, -topic, -repetitive_patterns, -named_entities)
+      
+      # Validate
+      res_df <- res_df |>
+        dplyr::mutate(
+          l_d = sapply(description, length),
+        l_l = sapply(label, length),
+        is_valid_json = ifelse(l_d + l_l != 2, FALSE, is_valid_json)
+      ) |>
+      dplyr::select(-l_d, -l_l)
+    
+    res_all[[retry + 1]] <- res_df
+      
+      res_all[[retry + 1]] <- res_df
+      
+      if (res_df$is_valid_json) {
+        if (verbose) cli::cli_inform("  Valid JSON received.")
+        break
+      }
+      
+      if (retry < retries) {
+        current_text <- stringr::str_trunc(current_text, retry_trunc)
+      }
+    }
+    
+    # Get best result for this slice
+    res_best <- dplyr::bind_rows(res_all) |>
+      dplyr::slice_max(order_by = is_valid_json, n = 1, with_ties = FALSE)
+    
+    all_results[[i]] <- res_best
+  }
+  
+  # Combine all results
+  res_combined <- dplyr::bind_rows(all_results)
+  res_dt <- data.table::as.data.table(res_combined)
+  
+  # Merge with original slice metadata (except text_slice_clean)
+  slice_meta <- slice_dt[, !c("text_slice_clean"), with = FALSE]
+  res_dt <- merge(slice_meta, res_dt, by = "id", all.y = TRUE)
+  
+  return(res_dt)
+}

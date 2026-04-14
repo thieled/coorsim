@@ -120,7 +120,8 @@ utils::globalVariables(c(".",
                          "schema_comm",
                          "prompts",
                          "a_follower",
-                         "a_following" 
+                         "a_following",
+                         "text_slice_clean"
                          ))
 
 
