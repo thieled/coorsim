@@ -16,6 +16,7 @@ label_users(
   retry_trunc = 4000,
   seed = 42,
   temp = 0,
+  keep_description_json = FALSE,
   verbose = TRUE
 )
 }
@@ -51,6 +52,10 @@ context overflow. Default is \code{4000}.}
 \item{seed}{Integer. Random seed used for model sampling; incremented by 1 on each retry. Default is \code{42}.}
 
 \item{temp}{Numeric. Sampling temperature for model generation (0 = deterministic). Default is \code{0.0}.}
+
+\item{keep_description_json}{Logical. If \code{FALSE} (default), extracts and concatenates sentences from 
+structured description objects into clean text. If \code{TRUE}, preserves JSON structure as text. Only relevant 
+when description is returned as a JSON object with sentence_1 through sentence_5 fields.}
 
 \item{verbose}{Logical. Whether to display progress messages and retry information. Default is \code{TRUE}.}
 }

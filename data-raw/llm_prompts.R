@@ -1,36 +1,54 @@
 # data-raw/llm_prompts.R
 
+####################################################################################
+#
+# Users - Prompts -------------------------------------------------------------------
+#
+####################################################################################
+
+### Version
+# Level: Users
+# Version: 0.4
+# Date-Time: 2026-04-28
+
+
 # Users - Prompts -------------------------------------------------------------------
 
-# # Prompt - Users
+# Prompt - Users
 prompt_user <- "Return valid JSON only — no explanations, no comments."
 
 # System prompts - Users 
 system_user <- "
-You are an expert social media analyst, describing users.
-Summarize a user's posts and metadata as structured JSON following the schema.
+You are a social media analyst describing users.
+Output valid JSON following the schema.
 
-Include:
-- 'description': EXACTLY 5 sentences following this structure:
-  Sentence 1: User's language/location and main topics addressed.
-  Sentence 2: Focal entities and their evaluation (supportive, dismissive, neutral). If no focal entities: state 'No focal entities are repeatedly referenced.'
-  Sentence 3: Repetitive patterns (emojis, hashtags, phrases). If none: state 'No repetitive patterns are present.'
-  Sentence 4: Tone and style characteristics (emotion_valence, incivility, elaborate).
-  Sentence 5: Noteworthy details beyond what was already described. If none: state 'No striking features are observable.'
-- 'lang': language code.
-- 'topic': up to 5 topical categories.
-- 'named_entities': up to 3 key persons, organizations, or countries, each with sentiment.
-- 'repetitive_patterns': repeated emojis, slogans, hashtags, or stylistic markers.
-- 'incivility': whether posts use uncivil, foul, or offensive language (yes, no).
-- 'elaborate': whether language style is rather elaborate or simple (elaborate, simple).
-- 'confidence': overall annotation certainty (0–1 scale).
+# Fields to include:
 
-Be concise and base all annotations solely on text after ### NEW INPUT ###!
-Use ### EXAMPLES ### only to understand the output format, but ignore its content during annotation.
+  ## Open text fields:
+  - 'description': Object containing EXACTLY 5 separate sentences that describe this user:
+    + sentence_1: [Location/language and topics] **In ONE sentence**, describe the user's language (inferred from post content, not just metadata) and/or location (from location field, flags, or context), followed by up to three main topics from: politics, society, culture, economy, security, migration, climate, science, other. Add subtopics if salient (e.g., ', namely ...'). **If no topics clearly apply, describe what the user focuses on based on post content.**
+    + sentence_2: [Named entities and sentiment] **In ONE sentence**, report repeatedly mentioned (≥2x) named entities with sentiment (positive/neutral/negative) and frequency (e.g., 'The user frequently mentions [entity] in a [sentiment] manner.'), or state 'No entities are repeatedly mentioned' if none exist. **Named entities are ONLY persons, organizations, or countries—NOT topics, themes, or concepts. Do not confuse concepts like 'climate crisis' or video/channel metadata with named entities.**
+    + sentence_3: [Repetitive patterns] **In ONE sentence**, list up to 3 repetitive character-string patterns (emojis, hashtags, tags, phrases, URLs) appearing ≥2x across ≥2 posts (e.g., 'The user frequently uses [pattern list].'), or state 'No repetitive patterns are present' if none exist. **Patterns must appear in the post content itself, not in bio/metadata. Note: YouTube comments rarely contain hashtags. Do not report channel names, video titles, or usernames as patterns unless used by the user.**
+    + sentence_4: [Tone and style] **In ONE sentence**, characterize the tone and style by integrating emotional valence, incivility, and elaborateness into descriptive labels (e.g., neutral-informative, aggressive, enthusiastic), or state why the tone cannot be characterized if applicable.
+    + sentence_5: [Striking features] **In ONE sentence**, identify striking features from posting BEHAVIOR observable in posts—such as spam-like/campaign behavior, exact post duplication, unusual metadata patterns, political expressions, behavioral peculiarities, unique stylistic choices, particularly strong topic focus, or other notable characteristics (e.g., 'A striking feature is [specific feature].'), or state 'No striking features are observable' if none exist. **Do not use bio information. Do not repeat info from sentences 1-4.**
+
+  ## Other fields:
+  - 'lang': language code (ISO 639-2). Infer from post content.
+  - 'topic': up to 3 most salient topics from: politics, security, economy, society, science, culture, migration, climate, other.
+  - 'named_entities': List up to 3 repeatedly mentioned (≥2x) named entities (persons/organizations/countries) with sentiment (positive/negative/neutral). **Only actual entities—not topics/concepts.**
+  - 'repetitive_patterns': List up to 3 repetitive character-string patterns (emojis, hashtags, tags, phrases, URLs) appearing ≥2x across different posts (≥2 posts). **From post content only.**
+  - 'incivility': 'yes' if explicit insults/slurs/offensive language present; else 'no'
+  - 'elaborate': 'yes' if majority of posts have ≥10 meaningful words with sentence structure; 'no' if mostly short/fragmented
+
+# General guidelines:
+- **Annotate faithfully**: All annotations must be verifiable from input after ### NEW INPUT ###. Do not hallucinate.
+- **Check post content vs metadata**: Distinguish what the user writes from video titles, channel names, and metadata.
+- **Follow instructions closely**: Provide exactly 5 sentences—no more, no less—as separate fields (sentence_1 through sentence_5).
+- **Use ### EXAMPLES ### only for format understanding**—ignore their content for annotation.
 "
 
 
-# Users - Examples --------------------------------------------------------
+# User examples ----------------------------------------------------------
 
 # Examples - Users
 example_user_text <- c(
@@ -94,7 +112,13 @@ example_user_text <- c(
 example_user_answer <- c(
   # Example 1: British nationalist user
   '{
-    "description": "The English-speaking user posts about politics, migration, and society, namely about UK sovereignty and immigration control. The user repeatedly supports Nigel Farage and UKIP while expressing dismissive views toward the EU. The user frequently uses the purple heart emoji 💜 and the hashtag #Farage2024. The tone is abrasive and emotional with negative valence, using uncivil language, and the style is moderately elaborate. A striking feature is the consistent nationalist framing combined with emotionally charged rhetoric.",
+    "description": {
+      "sentence_1": "The English-speaking user posts about politics, migration, and society, namely UK sovereignty and immigration control.",
+      "sentence_2": "The user repeatedly mentions Nigel Farage and UKIP in a positive manner while expressing negative views toward the EU.",
+      "sentence_3": "The user frequently uses the purple heart emoji 💜 and the hashtag #Farage2024.",
+      "sentence_4": "The style is abrasive and emotionally charged with uncivil language.",
+      "sentence_5": "A striking feature is the consistent nationalist framing combined with anti-EU rhetoric."
+    },
     "lang": "en",
     "topic": ["politics", "society", "migration"],
     "named_entities": [
@@ -104,13 +128,18 @@ example_user_answer <- c(
     ],
     "repetitive_patterns": ["💜", "#Farage2024"],
     "incivility": "yes",
-    "elaborate": "moderate",
-    "confidence": 0.85
+    "elaborate": "yes"
   }',
   
   # Example 2: European politics news account
   '{
-    "description": "The English-speaking user posts about politics and society, namely about the 2024 European Parliament elections. The user repeatedly references the European Parliament and the EU in a neutral manner. The user frequently uses hashtags #EPelections2024, #EuropeVotes, and #EU. The tone is neutral and informative with neutral emotional valence, no incivility, and an elaborate style. No striking features are observable.",
+    "description": {
+      "sentence_1": "The English-speaking user posts about politics and society, namely the 2024 European Parliament elections.",
+      "sentence_2": "The user repeatedly mentions the European Parliament and EU in a neutral manner.",
+      "sentence_3": "The user frequently uses the hashtags #EPelections2024, #EuropeVotes, and #EU.",
+      "sentence_4": "The style is neutral and informative with factual presentation and structured language.",
+      "sentence_5": "No striking features are observable."
+    },
     "lang": "en",
     "topic": ["politics", "society"],
     "named_entities": [
@@ -119,13 +148,18 @@ example_user_answer <- c(
     ],
     "repetitive_patterns": ["#EPelections2024", "#EuropeVotes", "#EU"],
     "incivility": "no",
-    "elaborate": "elaborate",
-    "confidence": 0.95
+    "elaborate": "yes"
   }',
   
   # Example 3: German pro-Russia peace activist
   '{
-    "description": "The German-speaking user posts about politics and security, namely about the Ukraine conflict and peace diplomacy. The user supports Sarah Wagenknecht and Russia while expressing dismissive views toward Ukraine. The user repeatedly uses the German flag 🇩🇪, Russian flag 🇷🇺, and peace sign ✌️ emojis. The tone is emotional and pacifist with positive emotional valence, no incivility, and an elaborate style. A striking feature is the consistent framing of German-Russian friendship as a path to peace.",
+    "description": {
+      "sentence_1": "The German-speaking user posts about politics and security, namely the Ukraine conflict and peace diplomacy.",
+      "sentence_2": "The user repeatedly mentions Sarah Wagenknecht and Russia in a positive manner while expressing negative views toward Ukraine.",
+      "sentence_3": "The user frequently uses the German flag 🇩🇪, Russian flag 🇷🇺, and peace sign ✌️ emojis.",
+      "sentence_4": "The style is emotional and pacifist with advocacy-oriented language.",
+      "sentence_5": "A striking feature is the consistent framing of German-Russian friendship as a path to peace."
+    },
     "lang": "de",
     "topic": ["politics", "security"],
     "named_entities": [
@@ -135,25 +169,35 @@ example_user_answer <- c(
     ],
     "repetitive_patterns": ["🇩🇪", "🇷🇺", "✌️"],
     "incivility": "no",
-    "elaborate": "elaborate",
-    "confidence": 0.85
+    "elaborate": "yes"
   }',
 
   # Example 4: Humorous / low-effort user
   '{
-    "description": "The user\'s language is undetermined and no clear topics are addressed. No focal entities are repeatedly referenced. The user repeatedly uses the laughing emoji sequence 😂😂😂. The tone is expressive with positive emotional valence, no incivility, and a simple style. A striking feature is the absence of any substantive content beyond emoji expression.",
+    "description": {
+      "sentence_1": "The user\'s language is undetermined and no clear topics are addressed.",
+      "sentence_2": "No entities are repeatedly mentioned.",
+      "sentence_3": "The user frequently uses the laughing emoji sequence 😂😂😂.",
+      "sentence_4": "The style is expressive with minimal text and purely emoji-based communication.",
+      "sentence_5": "A striking feature is the complete absence of substantive content beyond emoji expression."
+    },
     "lang": "und",
     "topic": [],
     "named_entities": [],
     "repetitive_patterns": ["😂😂😂"],
     "incivility": "no",
-    "elaborate": "simple",
-    "confidence": 0.6
+    "elaborate": "no"
   }',
   
   # Example: U.S. political / Iraq-related spammer
   '{
-  "description": "The English-speaking user potentially based in Iraq posts about politics and society, namely about U.S. political actors. The user repeatedly references Joe Biden and the White House in a neutral manner. The user frequently uses @JoeBiden, t.co/ links, and @UNClimateSummit tags. The tone is neutral with neutral emotional valence, no incivility, and a simple style. A striking feature is the spam-like behavior with minimal original content beyond tags and links.",
+  "description": {
+    "sentence_1": "The English-speaking user potentially based in Iraq posts about politics and society, namely U.S. political actors.",
+    "sentence_2": "The user repeatedly mentions Joe Biden and the White House in a neutral manner.",
+    "sentence_3": "The user frequently uses the tags @JoeBiden, @UNClimateSummit, and t.co/ links.",
+    "sentence_4": "The style is formulaic and repetitive with minimal original text.",
+    "sentence_5": "A striking feature is the spam-like behavior consisting primarily of tags and links."
+  },
   "lang": "en",
   "topic": ["politics", "society"],
   "named_entities": [
@@ -162,8 +206,7 @@ example_user_answer <- c(
   ],
   "repetitive_patterns": ["@JoeBiden", "t.co/", "@UNClimateSummit"],
   "incivility": "no",
-  "elaborate": "simple",
-  "confidence": 0.9
+  "elaborate": "no"
 }'
   
 )
@@ -176,32 +219,44 @@ schema_user <- list(
   type = "object",
   properties = list(
     
-    description = list(type = "string", description = "EXACTLY 5 sentences: (1) Language/location and main topics, (2) Focal entities and evaluation, (3) Repetitive patterns, (4) Tone and style, (5) Noteworthy details. State explicitly when information is absent (e.g., 'No focal entities are repeatedly referenced.')."),
+    description = list(
+      type = "object",
+      description = "Object containing EXACTLY 5 sentences describing the user.",
+      properties = list(
+        sentence_1 = list(type = "string", description = "Language/location and up to 3 topics (politics, society, culture, economy, security, migration, climate, science, other) with subtopics if salient."),
+        sentence_2 = list(type = "string", description = "Repeatedly mentioned (≥2x) named entities (persons/organizations/countries) with sentiment (positive/neutral/negative) and frequency indication."),
+        sentence_3 = list(type = "string", description = "Up to 3 repetitive character-string patterns (emojis, hashtags, tags, phrases, URLs) appearing ≥2x across ≥2 posts with frequency indication."),
+        sentence_4 = list(type = "string", description = "Tone and style characterization integrating emotional valence, incivility, and elaborateness into descriptive labels."),
+        sentence_5 = list(type = "string", description = "Striking features not covered in previous sentences (political expressions, metadata particularities, behavioral patterns, stylistic choices, etc.) or state none observable.")
+      ),
+      required = c("sentence_1", "sentence_2", "sentence_3", "sentence_4", "sentence_5")
+    ),
     
-    lang = list(type = "string", description = "Language code (ISO code, e.g., 'en', 'de')."),
+    lang = list(type = "string", description = "Language code (ISO 639-2 code, e.g., 'en', 'de')."),
     
     topic = list(
       type = "array",
-      description = "Up to 5 topics.",
+      description = "Up to 3 most salient topics.",
       items = list(
         type = "string",
         enum = c("politics",
                  "security",
                  "economy",
                  "society",
-                 "culture",
                  "science",
-                 "environment",
-                 "migration")
+                 "culture",
+                 "migration",
+                 "climate",
+                 "other")
       ),
       uniqueItems = TRUE,
       minItems = 0,
-      maxItems = 5
+      maxItems = 3
     ),
     
     named_entities = list(
       type = "array",
-      description = "Up to 3 named persons, organizations, or countries with sentiment.",
+      description = "Up to 3 named entities (persons/organizations/countries) repeatedly mentioned (≥2x) with targeted sentiment (positive/negative/neutral).",
       items = list(
         type = "object",
         properties = list(
@@ -219,7 +274,7 @@ schema_user <- list(
     
     repetitive_patterns = list(
       type = "array",
-      description = "Repeated emojis, slogans, or phrases.",
+      description = "Up to 3 repetitive character-string patterns (emojis, hashtags, tags, phrases, URLs, shortened URLs) appearing repeatedly (≥2x) across different posts (≥2 posts).",
       items = list(type = "string"),
       minItems = 0,
       maxItems = 3
@@ -228,22 +283,16 @@ schema_user <- list(
     incivility = list(
       type = "string",
       enum = c("yes", "no"),
-      description = "Presence of derogatory language, insults, swear-words."
+      description = "Whether explicit insults, slurs, or offensive language are present."
     ),
     
     elaborate = list(
       type = "string",
-      enum = c("elaborate", "moderate", "simple"),
-      description = "Linguistic complexity and verbosity of post."
-    ),
-    
-    confidence = list(
-      type = "number",
-      minimum = 0,
-      maximum = 1,
-      description = "Rate your overall confidence in annotating this user, scaled 0–1."
+      enum = c("yes", "no"),
+      description = "'yes' if majority of posts have ≥10 meaningful words with sentence structure; 'no' if mostly short/fragmented."
     )
   ),
+
   required = c(
     "description", 
     "lang", 
@@ -251,13 +300,17 @@ schema_user <- list(
     "named_entities",
     "repetitive_patterns", 
     "incivility",
-    "elaborate",
-    "confidence"
+    "elaborate"
   )
 )
 
 
-# Labelling Communities ---------------------------------------------------
+####################################################################################
+#
+# Communities / Chunks - Prompts -------------------------------------------------------------------
+#
+####################################################################################
+
 
 # Prompt - Communities
 prompt_comm <- "Return valid JSON only — no explanations, no comments."

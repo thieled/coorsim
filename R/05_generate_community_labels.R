@@ -226,6 +226,50 @@ sample_user_text <- function(groups_data,
 
 
 
+#' Convert JSON Description to Plain Text
+#'
+#' Unpacks a description column stored as JSON text (from keep_description_json = TRUE) 
+#' into concatenated plain text by extracting and joining sentence_1 through sentence_5.
+#'
+#' @param description_json Character vector containing JSON-formatted descriptions
+#'
+#' @return Character vector with concatenated sentence text
+#'
+#' @examples
+#' \dontrun{
+#' # Convert a data frame column
+#' df$description <- unpack_description_json(df$description)
+#' 
+#' # Or use with dplyr
+#' df <- df |> dplyr::mutate(description = unpack_description_json(description))
+#' }
+#'
+#' @export
+unpack_description_json <- function(description_json) {
+  sapply(description_json, function(desc) {
+    if (is.na(desc) || desc == "") return(NA_character_)
+    
+    tryCatch({
+      # Parse JSON
+      parsed <- jsonlite::fromJSON(desc)
+      
+      # Extract sentences
+      sentence_names <- paste0("sentence_", 1:5)
+      sentences <- sapply(sentence_names, function(s) {
+        parsed[[s]] %||% ""
+      }, USE.NAMES = FALSE)
+      
+      # Remove empty sentences and concatenate
+      sentences <- sentences[sentences != ""]
+      paste(sentences, collapse = " ")
+      
+    }, error = function(e) {
+      # If not valid JSON or parsing fails, return as-is
+      desc
+    })
+  }, USE.NAMES = FALSE)
+}
+
 
 #' Label Users Using a Local LLM
 #'
@@ -259,6 +303,9 @@ sample_user_text <- function(groups_data,
 #' context overflow. Default is \code{4000}.
 #' @param seed Integer. Random seed used for model sampling; incremented by 1 on each retry. Default is \code{42}.
 #' @param temp Numeric. Sampling temperature for model generation (0 = deterministic). Default is \code{0.0}.
+#' @param keep_description_json Logical. If \code{FALSE} (default), extracts and concatenates sentences from 
+#' structured description objects into clean text. If \code{TRUE}, preserves JSON structure as text. Only relevant 
+#' when description is returned as a JSON object with sentence_1 through sentence_5 fields.
 #' @param verbose Logical. Whether to display progress messages and retry information. Default is \code{TRUE}.
 #'
 #' @return 
@@ -307,6 +354,7 @@ label_users <- function(groups_data,
                         retry_trunc = 4000, 
                         seed = 42,
                         temp = 0.0,
+                        keep_description_json = FALSE,
                         verbose = TRUE) {
   
   if (!"user_labels" %in% names(groups_data)) {
@@ -345,6 +393,36 @@ label_users <- function(groups_data,
   }
   
   user_labels <- data.table::copy(groups_data$user_labels)
+  
+  # Helper function to process description field (handles both string and object formats)
+  process_description <- function(desc, keep_json = FALSE) {
+    if (is.null(desc)) return(NA_character_)
+    
+    # If description is already a string, return as-is
+    if (is.character(desc)) return(desc)
+    
+    # If it's a list/object with sentence fields
+    if (is.list(desc)) {
+      sentence_names <- paste0("sentence_", 1:5)
+      has_sentences <- all(sentence_names %in% names(desc))
+      
+      if (has_sentences) {
+        if (keep_json) {
+          # Return as JSON text (preserves structure)
+          return(jsonlite::toJSON(desc, auto_unbox = TRUE))
+        } else {
+          # Extract and concatenate sentences
+          sentences <- sapply(sentence_names, function(s) desc[[s]] %||% "", USE.NAMES = FALSE)
+          # Remove empty sentences and join with space
+          sentences <- sentences[sentences != ""]
+          return(paste(sentences, collapse = " "))
+        }
+      }
+    }
+    
+    # Fallback for unexpected formats
+    return(NA_character_)
+  }
   
   if (!requireNamespace("rollama", quietly = TRUE)) {
     stop("Package 'rollama' is required for this function. Please install it.")
@@ -402,7 +480,7 @@ label_users <- function(groups_data,
         is_valid_json = purrr::map_lgl(response, jsonlite::validate),
         
         # --- Scalar fields ---
-        description = purrr::map_chr(parsed_json, ~ .x$description %||% NA_character_),
+        description = purrr::map_chr(parsed_json, ~ process_description(.x$description, keep_description_json)),
         lang = purrr::map_chr(parsed_json, ~ .x$lang %||% NA_character_),
     #    emotion_valence = purrr::map_chr(parsed_json, ~ .x$emotion_valence %||% NA_character_),
         incivility = purrr::map_chr(parsed_json, ~ .x$incivility %||% NA_character_),
@@ -480,6 +558,8 @@ label_users <- function(groups_data,
   
   return(groups_data)
 }
+
+
 
 
 
