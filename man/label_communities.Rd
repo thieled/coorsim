@@ -8,9 +8,9 @@ label_communities(
   groups_data,
   max_n_per_slice = 10,
   min_chars = 1,
-  max_chars = 1000,
+  max_chars = Inf,
   min_share = NULL,
-  model = "llama3.2:3b",
+  model = "gemma3:12b",
   retries = 3,
   retry_trunc = 4000,
   seed = 42,
@@ -39,13 +39,13 @@ communities. Default is \code{10}.}
 Default is \code{1}.}
 
 \item{max_chars}{Integer. Maximum allowed character length per slice (longer input will be truncated).
-Default is \code{1000}.}
+Default is \code{Inf}.}
 
 \item{min_share}{Optional numeric. Minimum cumulative posting share (\code{user_share_comm})
 per slice. Default is \code{NULL} (no filter).}
 
 \item{model}{Character string. The local LLM model to query via Ollama
-(e.g., \code{"llama3.2:3b"}). Default is \code{"llama3.2:3b"}.}
+(e.g., \code{"gemma3:12b"}). Default is the task-evaluated \code{"gemma3:12b"}.}
 
 \item{retries}{Integer. Maximum number of re-query attempts for invalid or unparseable
 JSON responses. Default is \code{3}.}
