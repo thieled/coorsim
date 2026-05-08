@@ -11,7 +11,6 @@
 # Version: 0.4
 # Date-Time: 2026-04-28
 
-
 # Users - Prompts -------------------------------------------------------------------
 
 # Prompt - Users
@@ -312,32 +311,53 @@ schema_user <- list(
 ####################################################################################
 
 
+# Community Prompts ------------------------------------------------------
+
 # Prompt - Communities
 prompt_comm <- "Return valid JSON only — no explanations, no comments."
 
 # System Prompt - Communities
 system_comm <- "
-You are an expert social media analyst, describing user communities.
-Summarize a community of social media users based on their descriptions and metadata in a structured JSON following the schema.
+You are a social media analyst summarizing user communities.
 
-Include:
-- 'label': concise, informative English label characterizing the community.
-- 'description': EXACTLY 5 sentences following this structure:
-  Sentence 1: Community's predominant language/location and main topics addressed.
-  Sentence 2: Focal entities and their typical evaluation across the community. If no focal entities: state 'No focal entities are repeatedly referenced across the community.'
-  Sentence 3: Repetitive patterns shared across the community. If none: state 'No shared repetitive patterns are present.'
-  Sentence 4: Predominant tone and style characteristics across the community.
-  Sentence 5: Noteworthy community-level features beyond what was already described. If none: state 'No striking features are observable.'
-- 'lang': predominant language among users.
-- 'topic': up to 5 recurring thematic categories.
-- 'named_entities': up to 3 key persons, organizations, or countries repeatedly mentioned, each with prevailing sentiment.
-- 'repetitive_patterns': recurring emojis, slogans, hashtags, or stylistic markers.
-- 'incivility': whether the community commonly uses uncivil, foul, or offensive language (yes, no).
-- 'elaborate': typical linguistic elaboration (elaborate, moderate, simple).
-- 'confidence': your confidence in the overall annotation, scaled 0–1.
+## Input
+The input contains multiple user-level descriptions in structured JSON format from a previous round of LLM-summarization.
 
-Be concise and base all annotations solely on text after ### NEW INPUT ###!
-Use ### EXAMPLES ### only to understand the output format, but ignore its content during annotation.
+## Aim
+Your task is to **characterize** the community of users as a WHOLE following the instructions below. Take ALL users in the input data into account for your community characterization.
+
+## Rules
+- **Annotate faithfully**: All annotations must be verifiable from input after ### NEW INPUT ###. Do not hallucinate!
+- **Be precise**: Be specific in your characterizations, state the frequency of reported features, and highlight inconsistencies or remarkable similarities.
+- **Follow the Instructions**: Each output field has a distinct, fixed task — read every field description carefully and do not mix up their functions.
+- **Write complete sentences**: Every desc_ field MUST be a grammatically complete sentence — NOT a comma-separated list of keywords or labels. For example, 'Turkish, politics, society' or 'emotional, positive, elaborate' are INVALID. Write 'The community predominantly speaks Turkish and discusses politics and society.' and 'The predominant tone is emotional and positive with no incivility and an elaborate style.' instead.
+- **Use sentence starters**: Begin each desc_ field with the prescribed opener (e.g., 'The community …', 'Users repeatedly mention …', 'Members frequently share …', 'The predominant tone is …', 'A striking feature is …' or the prescribed fallback phrase).
+- **Use ### EXAMPLES ### only for format understanding**—summarize the input after ### NEW INPUT ###.
+
+## Fields to Annotate
+Output valid JSON, strictly following these instructions and the schema:
+
+- 'label': [Community-Label] Title-Cased noun phrase of 4–8 words characterizing this specific community, by its predominant location or language, its focus on named entities, stances, specific subtopics, or a notable behavior from the input. DO NOT provide 'snake_case' labels. If a community is heterogeneous or ambivalent, state this.
+  Examples of required specificity: 'UK Farage Supporters Opposing EU Immigration', 'Pakistani PPP Advocates Framing Bilawal as Climate Leader', 'Arabic Anti-Saudi Government Critics'
+
+- 'desc_lang_topics': [Language and topics] Write ONE complete sentence starting with 'The community predominantly speaks …' (or 'The [language]-speaking community …'), describing the predominant language/location, then name up to 3 topics. Add subtopics if salient (', namely …'). Aggregate across all users — do not copy one user. 
+
+- 'desc_named_entities': [Named entities] Write ONE complete sentence starting with 'Users repeatedly mention …' or 'No focal entities are repeatedly referenced across the community.' Name up to 3 persons/organizations/countries from ≥2 users, each with prevailing sentiment (positive/neutral/negative). 
+
+- 'desc_patterns': [Repetitive patterns] Write ONE complete sentence starting with 'Members frequently share …' or 'No shared repetitive patterns are present.' List up to 3 character-string patterns (emojis, hashtags, tags, phrases, URLs) from ≥2 users. 
+
+- 'desc_tone_style': [Tone and style] Write ONE complete sentence starting with 'The predominant tone is …', integrating emotional valence, majority incivility, and majority elaborateness using descriptive labels (e.g., neutral-informative, aggressive, enthusiastic). 
+
+- 'desc_striking': [Striking community features] Write ONE complete sentence starting with 'A striking feature is …' or 'No striking features are observable.' Identify noteworthy community-level observations not already covered in the other desc_ fields.
+
+- 'lang': predominant ISO 639-2 language code (e.g., 'en', 'und').
+- 'topic': up to 3 recurring topics from: politics, security, economy, society, science, culture, migration, climate, other.
+- 'named_entities': up to 3 persons/organizations/countries from ≥2 users' named_entities fields, with prevailing sentiment.
+- 'repetitive_patterns': up to 3 patterns from ≥2 users' repetitive_patterns fields.
+- 'incivility': 'yes' if >50% of users are annotated incivility=yes; else 'no'.
+- 'elaborate': 'yes' if >50% of users are annotated elaborate=yes; else 'no'.
+- 'confidence': 0–1.
+
 "
 
 # Examples / Answers - Communities ----------------------------------------
@@ -355,7 +375,7 @@ example_comm_text <- c(
      ],
      "repetitive_patterns": ["💜", "#Farage2024"],
      "incivility": "yes",
-     "elaborate": "moderate"},
+     "elaborate": "yes"},
     {"name": "ukpatriot_84",
      "description": "The English-speaking user posts about politics and society, namely about Brexit and national sovereignty. The user supports UKIP and expresses dismissive views toward the EU. The user frequently uses the purple heart emoji 💜 and the hashtag #Farage2024. The tone is patriotic and emotional with negative valence, using uncivil language, and the style is simple. A striking feature is the use of 💜 as a partisan loyalty symbol.",
      "lang": "en",
@@ -366,62 +386,9 @@ example_comm_text <- c(
      ],
      "repetitive_patterns": ["💜", "#Farage2024"],
      "incivility": "yes",
-     "elaborate": "simple"}]',
-  
-  # Example 2: Pro-Wagenknecht peace community
-  '[{"name": "denker_fuer_frieden",
-     "description": "The German-speaking user posts about politics and security, namely about the Ukraine conflict and peace diplomacy. The user supports Sarah Wagenknecht and Russia while expressing dismissive views toward NATO. The user repeatedly uses the German flag 🇩🇪, Russian flag 🇷🇺, and peace sign ✌️ emojis. The tone is emotional and pacifist with positive emotional valence, no incivility, and a moderately elaborate style. A striking feature is the consistent framing of German-Russian friendship as a path to peace.",
-     "lang": "de",
-     "topic": ["politics", "security"],
-     "named_entities": [
-       {"entity": "Sarah Wagenknecht", "sentiment": "positive"},
-       {"entity": "Russia", "sentiment": "positive"},
-       {"entity": "NATO", "sentiment": "negative"}
-     ],
-     "repetitive_patterns": ["🇩🇪", "🇷🇺", "✌️"],
-     "incivility": "no",
-     "elaborate": "moderate"},
-    {"name": "friedenjetzt88",
-     "description": "The German-speaking user posts about politics and society, namely about peace with Russia. The user supports Russia while expressing dismissive views toward Ukraine and weapon deliveries. The user repeatedly uses the German flag 🇩🇪 and Russian flag 🇷🇺 emojis. The tone is hopeful and emotional with positive emotional valence, no incivility, and a moderately elaborate style. A striking feature is the naive framing of peace through unilateral friendship.",
-     "lang": "de",
-     "topic": ["politics", "society"],
-     "named_entities": [
-       {"entity": "Russia", "sentiment": "positive"},
-       {"entity": "Ukraine", "sentiment": "negative"}
-     ],
-     "repetitive_patterns": ["🇩🇪", "🇷🇺"],
-     "incivility": "no",
-     "elaborate": "moderate"}]',
-  
-  # Example 3: Mixed and unclear community
-  '[{"name": "mr_niceguy",
-     "description": "The user\'s language is undetermined and no clear topics are addressed. No focal entities are repeatedly referenced. The user repeatedly uses the laughing emoji sequence 😂😂😂. The tone is expressive with positive emotional valence, no incivility, and a simple style. A striking feature is the absence of any substantive content beyond emoji expression.",
-     "lang": "und",
-     "topic": [],
-     "named_entities": [],
-     "repetitive_patterns": ["😂😂😂"],
-     "incivility": "no",
-     "elaborate": "simple"},
-    {"name": "coolbeans44",
-     "description": "The English-speaking user posts about society with no consistent topic focus. No focal entities are repeatedly referenced. The user repeatedly uses lol and the laughing emoji 😂. The tone is sarcastic and informal with neutral to positive valence, no incivility, and a simple style. A striking feature is the informal sharing of URLs without substantive commentary.",
-     "lang": "en",
-     "topic": ["society"],
-     "named_entities": [],
-     "repetitive_patterns": ["lol", "😂"],
-     "incivility": "no",
-     "elaborate": "simple"},
-    {"name": "newsreactor_x",
-     "description": "The English-speaking user posts about politics and society, namely about news and current events. The user references Biden in a neutral manner. The user repeatedly uses the laughing emoji 😂 and eye-roll emoji 🙄. The tone is mocking and sarcastic with neutral valence, no incivility, and a simple style. A striking feature is the brief reactive commentary without taking clear political stances.",
-     "lang": "en",
-     "topic": ["politics", "society"],
-     "named_entities": [
-       {"entity": "Biden", "sentiment": "neutral"}
-     ],
-     "repetitive_patterns": ["😂", "🙄"],
-     "incivility": "no",
-     "elaborate": "simple"}]',
-  
-  # Example 4: U.S.–Iraq political spammer community
+     "elaborate": "no"}]',
+
+  # Example 2: U.S.–Iraq political spammer community
   '[{"name": "Alpha044IraqiHero",
      "description": "The English-speaking user potentially based in Iraq posts about politics and society, namely about U.S. political actors. The user repeatedly references Joe Biden and the White House in a neutral manner. The user frequently uses @JoeBiden, t.co/ links, and @UNClimateSummit tags. The tone is neutral with neutral emotional valence, no incivility, and a simple style. A striking feature is the spam-like behavior with minimal original content beyond tags and links.",
      "lang": "en",
@@ -432,7 +399,7 @@ example_comm_text <- c(
      ],
      "repetitive_patterns": ["@JoeBiden", "@UNClimateSummit", "t.co/"],
      "incivility": "no",
-     "elaborate": "simple"},
+     "elaborate": "no"},
     {"name": "A044LeftBehind",
      "description": "The English-speaking user posts about politics and society. The user repeatedly references Joe Biden in a neutral manner. The user frequently uses t.co/ links, @JoeBiden, and @WhiteHouse tags. The tone is neutral with neutral emotional valence, no incivility, and a simple style. A striking feature is the semi-automated pattern focused on link amplification with minimal original content.",
      "lang": "en",
@@ -442,14 +409,18 @@ example_comm_text <- c(
      ],
      "repetitive_patterns": ["t.co/", "@JoeBiden", "@WhiteHouse"],
      "incivility": "no",
-     "elaborate": "simple"}]'
+     "elaborate": "no"}]'
 )
 
 
 example_comm_answer <- c(
   '{
-    "label": "UKIP Supporter Community",
-    "description": "The English-speaking community based in the UK posts about politics and society, namely about nationalism and immigration control. Users consistently support Nigel Farage and UKIP while expressing dismissive views toward the EU. Members frequently share the purple heart emoji 💜 and the hashtag #Farage2024 as political markers. The predominant tone is abrasive and emotional with negative valence, incivility is present, and the style is moderately elaborate. A striking feature is the use of 💜 as a consistent identity symbol for party loyalty.",
+    "label": "UK Nationalist UKIP and Farage Loyalists",
+    "desc_lang_topics": "The English-speaking community based in the UK posts about politics, society, and migration, namely about nationalism and immigration control.",
+    "desc_named_entities": "Users repeatedly mention Nigel Farage and UKIP in a positive manner while expressing negative views toward the EU.",
+    "desc_patterns": "Members frequently share the purple heart emoji 💜 and the hashtag #Farage2024 as political markers.",
+    "desc_tone_style": "The predominant tone is abrasive and emotional with negative valence, incivility is present, and the style ranges from simple to moderately elaborate.",
+    "desc_striking": "A striking feature is near-identical framing across users: both employ 💜 as a party loyalty symbol and share the same slogans, suggesting coordinated messaging.",
     "lang": "en",
     "topic": ["politics", "society", "migration"],
     "named_entities": [
@@ -459,50 +430,26 @@ example_comm_answer <- c(
     ],
     "repetitive_patterns": ["💜", "#Farage2024"],
     "incivility": "yes",
-    "elaborate": "moderate",
+    "elaborate": "no",
     "confidence": 0.9
   }',
-  
+
   '{
-    "label": "Pro-Wagenknecht Peace Advocates",
-    "description": "The German-speaking community based in Germany posts about politics, security, and society, namely about the Ukraine conflict and peace diplomacy. Users support Sarah Wagenknecht and Russia while expressing dismissive views toward NATO. Members frequently share the German flag 🇩🇪, Russian flag 🇷🇺, and peace sign ✌️ emojis. The predominant tone is emotional and pacifist with positive valence, no incivility, and a moderately elaborate style. A striking feature is the symbolic use of flag emojis to express German-Russian friendship as a political statement.",
-    "lang": "de",
-    "topic": ["politics", "security", "society"],
-    "named_entities": [
-      {"entity": "Sarah Wagenknecht", "sentiment": "positive"},
-      {"entity": "Russia", "sentiment": "positive"},
-      {"entity": "NATO", "sentiment": "negative"}
-    ],
-    "repetitive_patterns": ["🇩🇪", "🇷🇺", "✌️"],
-    "incivility": "no",
-    "elaborate": "moderate",
-    "confidence": 0.9
-  }',
-  
-  '{
-    "label": "Diverse Reaction-Based Users Lacking Substance",
-    "description": "The English-speaking community posts about society with minimal substantive or ideological content. No focal entities are repeatedly referenced across the community. Members frequently share laughing emoji 😂, the phrase lol, and the eye-roll emoji 🙄. The predominant tone is casual and expressive with neutral to positive valence, no incivility, and a simple style. A striking feature is the complete absence of political or argumentative content across the community.",
-    "lang": "en",
-    "topic": ["society"],
-    "named_entities": [],
-    "repetitive_patterns": ["😂", "lol", "🙄"],
-    "incivility": "no",
-    "elaborate": "simple",
-    "confidence": 0.6
-  }',
-  
-  '{
-    "label": "US–Iraq Political Spammer Network",
-    "description": "The English-speaking community potentially based in Iraq posts about politics and society, namely about U.S. political actors and online behavior. Users repeatedly reference Joe Biden and the White House in a neutral manner. Members frequently share @JoeBiden, @UNClimateSummit tags, and t.co/ links. The predominant tone is neutral with neutral emotional valence, no incivility, and a simple style. A striking feature is the coordinated spam-like behavior with minimal original content and recurring 044 identifiers suggesting automated activity.",
+    "label": "Iraq-Based Biden-Targeting Political Link Spammers",
+    "desc_lang_topics": "The English-speaking community potentially based in Iraq posts about politics and society, namely about U.S. political actors.",
+    "desc_named_entities": "Users repeatedly mention Joe Biden and the White House in a neutral manner.",
+    "desc_patterns": "Members frequently share @JoeBiden tags and t.co/ links across users.",
+    "desc_tone_style": "The predominant tone is neutral with neutral emotional valence, no incivility, and a simple style.",
+    "desc_striking": "A striking feature is coordinated spam-like behavior — both users share the same tag-and-link template with minimal original content and display the \'044\' identifier pattern in usernames, suggesting automated or organized activity.",
     "lang": "en",
     "topic": ["politics", "society"],
     "named_entities": [
       {"entity": "Joe Biden", "sentiment": "neutral"},
       {"entity": "White House", "sentiment": "neutral"}
     ],
-    "repetitive_patterns": ["@JoeBiden", "@UNClimateSummit", "t.co/"],
+    "repetitive_patterns": ["@JoeBiden", "t.co/"],
     "incivility": "no",
-    "elaborate": "simple",
+    "elaborate": "no",
     "confidence": 0.88
   }'
 )
@@ -510,185 +457,202 @@ example_comm_answer <- c(
 
 # Slices ------------------------------------------------------------------
 
-# System Prompt - Communities
+# System Prompt - Communities (Slices)
 system_comm_slices <- "
-You are an expert social media analyst, describing user communities.
-Summarize a community of social media users based on the structured descriptions of slices of this community, providing a structured JSON following the schema.
+You are a social media analyst summarizing user communities.
 
-Include:
-- 'label': concise, informative English label characterizing the community.
-- 'description': EXACTLY 5 sentences following this structure:
-  Sentence 1: Community's predominant language/location and main topics addressed.
-  Sentence 2: Focal entities and their typical evaluation across slices. If no focal entities: state 'No focal entities are repeatedly referenced across the community.'
-  Sentence 3: Repetitive patterns shared across slices. If none: state 'No shared repetitive patterns are present.'
-  Sentence 4: Predominant tone and style characteristics synthesized from slices.
-  Sentence 5: Noteworthy community-level features beyond what was already described. If none: state 'No striking features are observable.'
-- 'lang': predominant language among users.
-- 'topic': up to 5 recurring thematic categories.
-- 'named_entities': up to 3 key persons, organizations, or countries repeatedly mentioned, each with prevailing sentiment.
-- 'repetitive_patterns': recurring emojis, slogans, hashtags, or stylistic markers.
-- 'incivility': whether the community commonly uses uncivil, foul, or offensive language (yes, no).
-- 'elaborate': typical linguistic elaboration (elaborate, moderate, simple).
-- 'confidence': your confidence in the overall annotation, scaled 0–1.
+## Input
+The input contains multiple slice-level community descriptions in structured JSON format from a previous round of LLM-summarization. Each slice represents a subset of users within this community and includes a 'share' field indicating its relative size (%) among all community members.
 
-Be concise and base all annotations solely on text after ### NEW INPUT ###!
-Use ### EXAMPLES ### only to understand the output format, but ignore its content during annotation.
+## Aim
+Your task is to **characterize** the community of ALL slices as a WHOLE following the instructions below. Take ALL slices in the input data into account, **weighting each slice by its share** when aggregating.
+
+## Rules
+- **Annotate faithfully**: All annotations must be verifiable from input after ### NEW INPUT ###. Do not hallucinate!
+- **Weight by share**: When aggregating across slices, weight each slice's characteristics proportionally by its 'share' value. Larger slices should contribute more to the overall characterization.
+- **Be precise**: Be specific in your characterizations, state the frequency of reported features, and highlight inconsistencies or remarkable similarities.
+- **Follow the Instructions**: Each output field has a distinct, fixed task — read every field description carefully and do not mix up their functions.
+- **Write complete sentences**: Every desc_ field MUST be a grammatically complete sentence — NOT a comma-separated list of keywords or labels. For example, 'Turkish, politics, society' or 'emotional, positive, elaborate' are INVALID. Write 'The community predominantly speaks Turkish and discusses politics and society.' and 'The predominant tone is emotional and positive with no incivility and an elaborate style.' instead.
+- **Use sentence starters**: Begin each desc_ field with the prescribed opener (e.g., 'The community …', 'Users repeatedly mention …', 'Members frequently share …', 'The predominant tone is …', 'A striking feature is …' or the prescribed fallback phrase).
+- **Use ### EXAMPLES ### only for format understanding**—summarize the input after ### NEW INPUT ###.
+
+## Fields to Annotate
+Output valid JSON, strictly following these instructions and the schema:
+
+- 'label': [Community-Label] Title-Cased noun phrase of 4–8 words characterizing this specific community, by its predominant location or language, its focus on named entities, stances, specific subtopics, or a notable behavior from the input. DO NOT provide 'snake_case' labels. If a community is heterogeneous or ambivalent, state this.
+  Examples of required specificity: 'UK Farage Supporters Opposing EU Immigration', 'Pakistani PPP Advocates Framing Bilawal as Climate Leader', 'Arabic Anti-Saudi Government Critics'
+
+- 'desc_lang_topics': [Language and topics] Write ONE complete sentence starting with 'The community predominantly speaks …' (or 'The [language]-speaking community …'), describing the predominant language/location, then name up to 3 topics. Add subtopics if salient (', namely …'). Aggregate across all slices weighted by share — do not copy one slice.
+
+- 'desc_named_entities': [Named entities] Write ONE complete sentence starting with 'Users repeatedly mention …' or 'No focal entities are repeatedly referenced across the community.' Name up to 3 persons/organizations/countries from ≥2 slices, each with prevailing sentiment (positive/neutral/negative).
+
+- 'desc_patterns': [Repetitive patterns] Write ONE complete sentence starting with 'Members frequently share …' or 'No shared repetitive patterns are present.' List up to 3 character-string patterns (emojis, hashtags, tags, phrases, URLs) from ≥2 slices.
+
+- 'desc_tone_style': [Tone and style] Write ONE complete sentence starting with 'The predominant tone is …', integrating emotional valence, majority incivility (weighted by share), and majority elaborateness (weighted by share) using descriptive labels (e.g., neutral-informative, aggressive, enthusiastic).
+
+- 'desc_striking': [Striking community features] Write ONE complete sentence starting with 'A striking feature is …' or 'No striking features are observable.' Identify noteworthy community-level observations not already covered in the other desc_ fields.
+
+- 'lang': predominant ISO 639-2 language code (e.g., 'en', 'und').
+- 'topic': up to 3 recurring topics from: politics, security, economy, society, science, culture, migration, climate, other.
+- 'named_entities': up to 3 persons/organizations/countries from ≥2 slices' named_entities fields, with prevailing sentiment.
+- 'repetitive_patterns': up to 3 patterns from ≥2 slices' repetitive_patterns fields.
+- 'incivility': 'yes' if slices with combined share >50% have incivility=yes; else 'no'.
+- 'elaborate': 'yes' if slices with combined share >50% have elaborate=yes; else 'no'.
+- 'confidence': 0–1.
 "
-
 
 
 # Aggregating slices
 example_comm_slices_text <- c(
-  
-  # --- Example 1: UKIP Community ---
-  '[{"slice":1,"share":70,"label":"UKIP Loyalists with Emphatic Emoji Use",
-     "description":"The English-speaking community based in the UK posts about politics and society, namely about sovereignty and immigration control. Users consistently support Nigel Farage and UKIP with assertive nationalism. Members frequently share the purple heart emoji 💜 and the hashtag #Farage2024 as party loyalty signals. The predominant tone is confident, emotional, and identity-driven with negative valence, incivility is present, and the style is moderately elaborate. A striking feature is the emphatic use of 💜 as a political identity marker."},
-    {"slice":2,"share":25,"label":"Brexit Advocates Criticizing Mainstream Conservatives",
-     "description":"The English-speaking community based in the UK posts about politics and society, namely about Brexit and Conservative Party failures. Users support Farage and UKIP while expressing dismissive views toward the Conservative Party and establishment politicians. Members frequently share anti-establishment rhetoric and UKIP-related hashtags. The predominant tone is accusatory, anti-elite, and assertively nationalist with negative valence, incivility is present, and the style is moderately elaborate. A striking feature is the framing of establishment betrayal versus UKIP\'s true vision."}]',
-  
-  # --- Example 2: Pro-Wagenknecht Peace Community ---
-  '[{"slice":1,"share":65,"label":"Pro-Wagenknecht Peace Supporters",
-     "description":"The German-speaking community based in Germany posts about politics and security, namely about the Ukraine conflict and diplomatic solutions. Users support Sarah Wagenknecht while expressing opposition to militarism. Members frequently share peace-related emojis and German flag symbols. The predominant tone is emotional and patriotic with positive valence, no incivility, and a moderately elaborate style. A striking feature is the emphasis on peace, neutrality, and diplomatic alternatives to military escalation."},
-    {"slice":2,"share":30,"label":"Pacifists and Pro-Russian Sympathizers",
-     "description":"The German-speaking community posts about politics and security, namely about peaceful relations with Russia. Users support Russia while expressing dismissive views toward NATO and its escalation policies. Members frequently share the German flag 🇩🇪 and Russian flag 🇷🇺 emojis to express friendship and solidarity. The predominant tone is anti-war, sentimental, and hopeful with positive valence, no incivility, and a moderately elaborate style. A striking feature is the symbolic use of flag emojis to promote German-Russian friendship as a political statement."}]',
-  
-  # --- Example 3: Mixed and Reaction-Based Users ---
-  '[{"slice":1,"share":55,"label":"Humorous Reaction Posters",
-     "description":"The English-speaking community posts about society with no clear topical focus. No focal entities are repeatedly referenced across the community. Members frequently share laughing emojis 😂 and light-hearted memes. The predominant tone is casual and expressive with positive valence, no incivility, and a simple style. A striking feature is the complete absence of substantive or argumentative content."},
-    {"slice":2,"share":35,"label":"Mixed Reaction-Based Users",
-     "description":"The English-speaking community posts about society and trending content with minimal topical consistency. No focal entities are repeatedly referenced across the community. Members frequently share sarcastic remarks and reaction emojis. The predominant tone is humorous and sarcastic with neutral valence, no incivility, and a simple style. A striking feature is the lack of argumentation or ideological consistency, dominated by scattered reactions to trending media."}]'
+
+  # --- Example 1: UK COP26 spam community ---
+  '[{"slice":1,"share":17.6,"label":"UK Politician-Targeting Spam Accounts","desc_lang_topics":"The English-speaking community posts about politics and society, namely UK politicians and COP26.","desc_named_entities":"Users repeatedly mention Boris Johnson in a neutral manner.","desc_patterns":"Members frequently share @BorisJohnson tags and t.co/ links across users.","desc_tone_style":"The predominant tone is neutral with neutral emotional valence, no incivility, and a simple style.","desc_striking":"A striking feature is coordinated spam-like behavior — all users share the same tag-and-link template with minimal original content, suggesting automated or organized activity.","lang":"en","topic":["politics","society"],"named_entities":[{"entity":"Boris Johnson","sentiment":"neutral"},{"entity":"COP26","sentiment":"neutral"}],"repetitive_patterns":["@BorisJohnson","@COP26","t.co/"],"incivility":"no","elaborate":"no"},{"slice":2,"share":3.3,"label":"UK Politician-Targeting Spam Accounts","desc_lang_topics":"The English-speaking community posts about politics and society, namely UK politicians and COP26.","desc_named_entities":"Users repeatedly mention Boris Johnson in a neutral manner, with some users also mentioning the Lord Speaker, Conservatives, Alok Sharma, Tom Tugendhat, and @10DowningStreet.","desc_patterns":"Members frequently share tags such as @BorisJohnson, @Conservatives, @COP26, @LordSpeaker, @BGIPU, @10DowningStreet, and t.co/ links across users.","desc_tone_style":"The predominant tone is neutral with a formulaic and repetitive style, minimal original text, and no incivility.","desc_striking":"A striking feature is coordinated spam-like behavior — all users share the same tag-and-link template with minimal original content, suggesting automated or organized activity.","lang":"en","topic":["politics","society"],"named_entities":[{"entity":"Boris Johnson","sentiment":"neutral"},{"entity":"Lord Speaker","sentiment":"neutral"},{"entity":"Conservatives","sentiment":"neutral"}],"repetitive_patterns":["@BorisJohnson","@COP26","@10DowningStreet"],"incivility":"no","elaborate":"no"},{"slice":3,"share":0.1,"label":"UK-Based Anti-Institutional and Politically Critical Community","desc_lang_topics":"The English-speaking community based in the UK posts about politics and society, namely UK government actors.","desc_named_entities":"Users repeatedly mention the Royal Family in a negative manner while expressing criticism of hypocrisy.","desc_patterns":"Members frequently share @10DowningStreet tags and t.co/ links across users.","desc_tone_style":"The predominant tone is critical and accusatory with emotive language, incivility is present, and the style ranges from informal to provocative.","desc_striking":"A striking feature is the explicit criticism of UK institutions, with some users employing irony and sarcasm in addressing politicians.","lang":"en","topic":["politics","society"],"named_entities":[{"entity":"Royal Family","sentiment":"negative"},{"entity":"10 Downing Street","sentiment":"neutral"}],"repetitive_patterns":["@10DowningStreet","@COP26","@BorisJohnson"],"incivility":"yes","elaborate":"no"}]',
+
+  # --- Example 2: German pro-Wagenknecht / pro-Russia peace community ---
+  '[{"slice":1,"share":65.0,"label":"Pro-Wagenknecht Peace Advocates","desc_lang_topics":"The German-speaking community based in Germany posts about politics and security, namely the Ukraine conflict and peace diplomacy.","desc_named_entities":"Users repeatedly mention Sarah Wagenknecht in a positive manner while expressing criticism of NATO and military escalation.","desc_patterns":"Members frequently share peace-related emojis ✌️ and the German flag 🇩🇪.","desc_tone_style":"The predominant tone is emotional and pacifist with positive valence, no incivility, and a moderately elaborate style.","desc_striking":"A striking feature is the consistent framing of diplomacy as the only valid solution to the Ukraine conflict.","lang":"de","topic":["politics","security"],"named_entities":[{"entity":"Sarah Wagenknecht","sentiment":"positive"},{"entity":"NATO","sentiment":"negative"}],"repetitive_patterns":["✌️","🇩🇪"],"incivility":"no","elaborate":"yes"},{"slice":2,"share":30.0,"label":"Pro-Russian German Sympathizers","desc_lang_topics":"The German-speaking community posts about politics and security, namely German-Russian relations and the Ukraine war.","desc_named_entities":"Users repeatedly mention Russia in a positive manner while expressing negative views toward NATO.","desc_patterns":"Members frequently share the Russian flag 🇷🇺 and German flag 🇩🇪 emojis.","desc_tone_style":"The predominant tone is empathetic and pro-Russian with positive valence, no incivility, and a moderately elaborate style.","desc_striking":"A striking feature is the symbolic use of flag emojis to express German-Russian solidarity.","lang":"de","topic":["politics","security"],"named_entities":[{"entity":"Russia","sentiment":"positive"},{"entity":"NATO","sentiment":"negative"}],"repetitive_patterns":["🇷🇺","🇩🇪"],"incivility":"no","elaborate":"yes"},{"slice":3,"share":5.0,"label":"General German Anti-War Voices","desc_lang_topics":"The German-speaking community posts about politics and society, namely anti-war sentiment.","desc_named_entities":"No focal entities are repeatedly referenced across the community.","desc_patterns":"Members frequently share the peace sign ✌️.","desc_tone_style":"The predominant tone is neutral and hopeful with positive valence, no incivility, and a simple style.","desc_striking":"No striking features are observable.","lang":"de","topic":["politics","society"],"named_entities":[],"repetitive_patterns":["✌️"],"incivility":"no","elaborate":"no"}]'
 )
 
 # Example answers
 example_comm_slices_answer <- c(
-  
-  # --- Example 1: UKIP ---
+
+  # --- Example 1: UK COP26 spam community ---
   '{
-    "label": "UKIP Loyalists and Brexit Hardliners",
-    "description": "The English-speaking community based in the UK posts about politics and society, namely about nationalism, immigration control, and Brexit. Users passionately support Nigel Farage and UKIP while expressing dismissive views toward the EU and mainstream Conservatives. Members frequently share the purple heart emoji 💜 and the hashtag #Farage2024 as symbols of party identity. The predominant tone is assertive, populist, and anti-establishment with negative valence, incivility is present, and the style is moderately elaborate. A striking feature is the emotional use of 💜 as a consistent marker of party loyalty and political commitment.",
+    "label": "UK COP26-Targeting Political Link Spam Community",
+    "desc_lang_topics": "The English-speaking community based in the UK posts about politics and society, namely UK politicians and COP26.",
+    "desc_named_entities": "Users repeatedly mention Boris Johnson in a neutral manner, with some slices also referencing other UK political figures and institutions neutrally.",
+    "desc_patterns": "Members frequently share @BorisJohnson tags, @COP26 tags, and t.co/ links across slices.",
+    "desc_tone_style": "The predominant tone is neutral and formulaic with neutral emotional valence, no incivility, and a simple style.",
+    "desc_striking": "A striking feature is near-identical coordinated spam behavior across the two dominant slices (combined share ~21%): all users share the same tag-and-link template with minimal original content, suggesting automated or organized activity; the small critical slice (0.1%) exhibits a markedly different, accusatory tone but has negligible weight.",
     "lang": "en",
-    "topic": ["politics", "society", "migration"],
+    "topic": ["politics", "society"],
     "named_entities": [
-      {"entity": "Nigel Farage", "sentiment": "positive"},
-      {"entity": "UKIP", "sentiment": "positive"},
-      {"entity": "EU", "sentiment": "negative"}
+      {"entity": "Boris Johnson", "sentiment": "neutral"},
+      {"entity": "COP26", "sentiment": "neutral"}
     ],
-    "repetitive_patterns": ["💜", "#Farage2024"],
-    "incivility": "yes",
-    "elaborate": "moderate",
-    "confidence": 0.9
+    "repetitive_patterns": ["@BorisJohnson", "@COP26", "t.co/"],
+    "incivility": "no",
+    "elaborate": "no",
+    "confidence": 0.88
   }',
-  
-  # --- Example 2: Wagenknecht ---
+
+  # --- Example 2: German pro-Wagenknecht / pro-Russia peace community ---
   '{
-    "label": "Pro-Wagenknecht Peace Advocates",
-    "description": "The German-speaking community based in Germany posts about politics, security, and society, namely about the Ukraine conflict and peace diplomacy. Users support Sarah Wagenknecht and Russia while expressing dismissive views toward NATO and its military escalation. Members frequently share the German flag 🇩🇪, Russian flag 🇷🇺, and peace sign ✌️ emojis. The predominant tone is empathetic, hopeful, and pacifist with positive valence, no incivility, and a moderately elaborate style. A striking feature is the emotional framing of pacifism through patriotic sentiment and the symbolic use of flag emojis to promote German-Russian friendship.",
+    "label": "German Pro-Wagenknecht Anti-NATO Peace Advocates",
+    "desc_lang_topics": "The German-speaking community based in Germany posts about politics and security, namely the Ukraine conflict, peace diplomacy, and German-Russian relations.",
+    "desc_named_entities": "Users repeatedly mention Sarah Wagenknecht in a positive manner and NATO in a negative manner, with the second-largest slice also referencing Russia positively.",
+    "desc_patterns": "Members frequently share the German flag 🇩🇪 and peace sign ✌️ emojis across slices.",
+    "desc_tone_style": "The predominant tone is emotional, pacifist, and empathetic with positive valence, no incivility, and an elaborate style.",
+    "desc_striking": "A striking feature is strong ideological homogeneity across the two dominant slices (combined share 95%): both the pro-Wagenknecht and the pro-Russian subgroups frame German-Russian solidarity and diplomacy as alternatives to military escalation, using overlapping emoji symbolism as political identity markers.",
     "lang": "de",
-    "topic": ["politics", "security", "society"],
+    "topic": ["politics", "security"],
     "named_entities": [
       {"entity": "Sarah Wagenknecht", "sentiment": "positive"},
-      {"entity": "Russia", "sentiment": "positive"},
-      {"entity": "NATO", "sentiment": "negative"}
+      {"entity": "NATO", "sentiment": "negative"},
+      {"entity": "Russia", "sentiment": "positive"}
     ],
-    "repetitive_patterns": ["🇩🇪", "🇷🇺", "✌️"],
+    "repetitive_patterns": ["🇩🇪", "✌️"],
     "incivility": "no",
-    "elaborate": "moderate",
-    "confidence": 0.9
-  }',
-  
-  # --- Example 3: Diverse / Reaction-based ---
-  '{
-    "label": "Diverse Reaction-Based Users Lacking Substance",
-    "description": "The English-speaking community posts about society with minimal substantive or ideological content. No focal entities are repeatedly referenced across the community. Members frequently share laughing emoji 😂, the phrase lol, and the eye-roll emoji 🙄. The predominant tone is casual, expressive, and non-political with neutral to positive valence, no incivility, and a simple style. A striking feature is the complete lack of argumentative or substantive content, with activity dominated by humorous reactions and sarcasm.",
-    "lang": "en",
-    "topic": ["society"],
-    "named_entities": [],
-    "repetitive_patterns": ["😂", "lol", "🙄"],
-    "incivility": "no",
-    "elaborate": "simple",
-    "confidence": 0.6
+    "elaborate": "yes",
+    "confidence": 0.92
   }'
 )
 
 
+
+###########################################################################
+#
 # Schema - Communities ----------------------------------------------------
+#
+##########################################################################
+
 
 schema_comm <- list(
   type = "object",
   properties = list(
-    
+
     label = list(
       type = "string",
-      description = "Concise and informative English label characterizing the community."
+      description = "[Community-Label] Specific Title-Cased noun phrase (4–8 words) capturing the community's most distinctive characteristics: location/language, named entities, stance, subtopics, or behaviors. (e.g., 'UK Farage Supporters Opposing EU Immigration')"
     ),
-    
-    description = list(
+
+    desc_lang_topics = list(
       type = "string",
-      description = "EXACTLY 5 sentences: (1) Language/location and main topics, (2) Focal entities and evaluation, (3) Repetitive patterns, (4) Tone and style, (5) Noteworthy details. State explicitly when information is absent (e.g., 'No focal entities are repeatedly referenced across the community.')."
+      description = "COMPLETE SENTENCE. Start with 'The community predominantly speaks …' or 'The [language]-speaking community …'. State predominant language/location and up to 3 topics (politics, society, culture, economy, security, migration, climate, science, other) with subtopics if salient (', namely …')."
     ),
-    
+
+    desc_named_entities = list(
+      type = "string",
+      description = "COMPLETE SENTENCE. Start with 'Users repeatedly mention …' naming up to 3 persons/organizations/countries from ≥2 users with prevailing sentiment (positive/neutral/negative), OR write the exact phrase 'No focal entities are repeatedly referenced across the community.'"
+    ),
+
+    desc_patterns = list(
+      type = "string",
+      description = "COMPLETE SENTENCE. Start with 'Members frequently share …' listing up to 3 patterns (emojis, hashtags, tags, phrases, URLs) from ≥2 users, OR write the exact phrase 'No shared repetitive patterns are present.'"
+    ),
+
+    desc_tone_style = list(
+      type = "string",
+      description = "COMPLETE SENTENCE. Start with 'The predominant tone is …'. Characterize tone and style across ALL users using descriptive labels, integrating emotional valence, majority incivility, and majority elaborateness."
+    ),
+
+    desc_striking = list(
+      type = "string",
+      description = "COMPLETE SENTENCE. Start with 'A striking feature is …' describing a noteworthy community-level observation not covered by the other desc_ fields, OR write the exact phrase 'No striking features are observable.'."
+    ),
+
     lang = list(
       type = "string",
       description = "Predominant language of users in the community (ISO code, e.g., 'en', 'de')."
     ),
-    
+
     topic = list(
       type = "array",
-      description = "Up to 5 recurring topics.",
+      description = "Up to 5 most salient recurring topics.",
       items = list(
         type = "string",
-        enum = c("politics",
-                 "security",
-                 "economy",
-                 "society",
-                 "culture",
-                 "science",
-                 "environment",
-                 "migration")
+        enum = c("politics", "security", "economy", "society", "science",
+                 "culture", "migration", "climate", "other")
       ),
       uniqueItems = TRUE,
       minItems = 0,
       maxItems = 5
     ),
-    
+
     named_entities = list(
       type = "array",
-      description = "Up to 3 key persons, organizations, or countries discussed within the community, with prevailing sentiment.",
+      description = "Up to 3 key persons, organizations, or countries appearing in ≥2 users' named_entities fields, with prevailing sentiment.",
       items = list(
         type = "object",
         properties = list(
-          entity = list(type = "string"),
-          sentiment = list(
-            type = "string",
-            enum = c("positive", "negative", "neutral")
-          )
+          entity    = list(type = "string"),
+          sentiment = list(type = "string", enum = c("positive", "negative", "neutral"))
         ),
         required = c("entity", "sentiment")
       ),
       minItems = 0,
       maxItems = 3
     ),
-    
+
     repetitive_patterns = list(
       type = "array",
-      description = "Recurring emojis, slogans, hashtags, or stylistic markers repeatedly used by members of the community.",
+      description = "Recurring emojis, slogans, hashtags, or stylistic markers appearing in ≥2 users' repetitive_patterns fields.",
       items = list(type = "string"),
       minItems = 0,
       maxItems = 3
     ),
-    
+
     incivility = list(
       type = "string",
       enum = c("yes", "no"),
-      description = "Indicates whether posts from this community often contain uncivil, foul, or offensive language."
+      description = "'yes' if the majority of users/slices (>50%) are annotated with incivility; else 'no'."
     ),
-    
+
     elaborate = list(
       type = "string",
-      enum = c("elaborate", "moderate", "simple"),
-      description = "Typical linguistic complexity and verbosity within the community."
+      enum = c("yes", "no"),
+      description = "'yes' if the majority of users/slices (>50%) are annotated as elaborate; else 'no'."
     ),
-    
+
     confidence = list(
       type = "number",
       minimum = 0,
@@ -698,7 +662,11 @@ schema_comm <- list(
   ),
   required = c(
     "label",
-    "description",
+    "desc_lang_topics",
+    "desc_named_entities",
+    "desc_patterns",
+    "desc_tone_style",
+    "desc_striking",
     "lang",
     "topic",
     "named_entities",
@@ -735,10 +703,18 @@ unlink("data/prompts.rda")
 unlink("data/examples.rda")
 unlink("data/schemata.rda")
 
-### Save them
+### Save them (external: user-facing via coorsim::prompts etc.)
 usethis::use_data(
   prompts, examples, schemata, 
   internal = FALSE, overwrite = TRUE, ascii = FALSE
 )
 
+### Save also as internal data (loads into namespace; accessible inside package functions)
+usethis::use_data(
+  prompts, examples, schemata,
+  internal = TRUE, overwrite = TRUE, ascii = FALSE
+)
+
 devtools::document()
+
+

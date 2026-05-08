@@ -280,13 +280,13 @@ unpack_description_json <- function(description_json) {
 #'
 #' The model should run via an active \emph{Ollama} Docker container with GPU (CUDA) support.
 #' Use `system("docker ps")` to verify that Ollama is running, and ensure that the 
-#' desired model (e.g., `"llama3.2:3b"`) has been pulled via Ollama before executing this function.
+#' desired model (e.g., `"llama3.1:8b"`) has been pulled via Ollama before executing this function.
 #'
 #' @param groups_data A list containing at least the element \code{user_labels}, 
 #' typically produced by [sample_user_text()]. This element must include a column \code{text} 
 #' with sampled user content and an \code{account_id} column.
 #' @param model Character string. Name of the local LLM model to be queried via Ollama. 
-#' Default is \code{"llama3.2:3b"}.
+#' Default is \code{"llama3.1:8b"}.
 #' @param prompt Optional character string providing user-facing task instructions 
 #' (defaults to the internal \code{prompts$prompt_user}).
 #' @param system Optional character string defining the system-level instruction to guide model behavior 
@@ -344,7 +344,7 @@ unpack_description_json <- function(description_json) {
 #'
 #' @export
 label_users <- function(groups_data, 
-                        model = "llama3.2:3b",
+                        model = "llama3.1:8b",
                         prompt = NULL,
                         system = NULL,
                         example = NULL,
@@ -674,6 +674,46 @@ slice_community_text <- function(groups_data,
 
 
 
+#' Reconstruct a 'description' value from the flat desc_* fields (v0.5 schema)
+#'
+#' Reads desc_lang_topics / desc_named_entities / desc_patterns /
+#' desc_tone_style / desc_striking from a parsed JSON list and returns either
+#' a JSON string (keep_json = TRUE) or a space-joined sentence string
+#' (keep_json = FALSE), matching the output contract of .process_comm_description().
+#'
+#' The mapping to the canonical sentence numbering is:
+#'   sentence_1 <- desc_lang_topics
+#'   sentence_2 <- desc_named_entities
+#'   sentence_3 <- desc_patterns
+#'   sentence_4 <- desc_tone_style
+#'   sentence_5 <- desc_striking
+#'
+#' @param parsed_json list. A parsed JSON response from the v0.5 schema.
+#' @param keep_json logical. If TRUE returns a JSON object string; else plain text.
+#' @return character(1)
+.reconstruct_description_v2 <- function(parsed_json, keep_json = FALSE) {
+  s1 <- parsed_json$desc_lang_topics    %||% ""
+  s2 <- parsed_json$desc_named_entities %||% ""
+  s3 <- parsed_json$desc_patterns       %||% ""
+  s4 <- parsed_json$desc_tone_style     %||% ""
+  s5 <- parsed_json$desc_striking       %||% ""
+
+  if (keep_json) {
+    desc_obj <- list(
+      sentence_1 = s1,
+      sentence_2 = s2,
+      sentence_3 = s3,
+      sentence_4 = s4,
+      sentence_5 = s5
+    )
+    return(jsonlite::toJSON(desc_obj, auto_unbox = TRUE))
+  }
+
+  sentences <- c(s1, s2, s3, s4, s5)
+  sentences <- sentences[nzchar(sentences)]
+  paste(sentences, collapse = " ")
+}
+
 #' Label Communities Using a Local LLM
 #'
 #' This function uses a locally hosted large language model (LLM) via the \pkg{rollama} interface
@@ -708,7 +748,7 @@ slice_community_text <- function(groups_data,
 #' (\code{0} = deterministic). Default is \code{0.0}.
 #' @param prompt Character. User-level prompt text used to instruct the model when labeling
 #' communities (overrides internal \code{prompts$prompt_comm}). Optional.
-#' @param system Character. System-level instruction guiding the model’s behavior
+#' @param system Character. System-level instruction guiding the model's behavior
 #' (overrides internal \code{prompts$system_comm}). Optional.
 #' @param system_slices Character. Optional override for \code{prompts$system_comm_slices},
 #' used for the aggregation step that combines slice-level labels into one community summary.
@@ -722,22 +762,27 @@ slice_community_text <- function(groups_data,
 #' Defaults to \code{examples$example_comm_slices_answer}.
 #' @param schema Optional JSON-like list defining the expected structured output format.
 #' Defaults to \code{schemata$schema_comm}.
+#' @param keep_description_json Logical. If \code{FALSE} (default), extracts and concatenates
+#' sentences from structured description objects into clean text. If \code{TRUE}, preserves JSON
+#' structure as text. Only relevant when description is returned as a JSON object with
+#' sentence_1 through sentence_5 fields.
 #' @param verbose Logical. Whether to print progress messages, retry information,
 #' and aggregation updates. Default is \code{TRUE}.
 #'
-#' @return 
+#' @return
 #' The same \code{groups_data} list, updated with a new \code{community_labels} element.
 #' This is a \pkg{data.table} with one row per labeled community containing:
 #' \describe{
 #'   \item{\code{community}}{Community identifier.}
 #'   \item{\code{label}}{LLM-generated label for the community.}
-#'   \item{\code{description}}{Concise LLM-generated summary of the community’s tone, style, and main topics.}
+#'   \item{\code{description}}{Concise LLM-generated summary of the community's tone, style, and main topics.}
 #'   \item{\code{lang}}{Predominant language inferred by the model.}
 #'   \item{\code{topic_1–topic_5}}{Up to five thematic categories assigned by the model.}
 #'   \item{\code{named_entity_1–named_entity_5}, \code{sentiment_1–sentiment_5}}{Named entities and associated sentiments.}
 #'   \item{\code{pattern_1–pattern_3}}{Recurring emojis, slogans, or stylistic markers.}
-#'   \item{\code{incivility}}{Whether the community often uses uncivil or offensive language.}
-#'   \item{\code{elaborate}}{Average linguistic elaboration level ("simple", "moderate", or "elaborate").}
+#'   \item{\code{incivility}}{Whether the majority of users use uncivil or offensive language ("yes"/"no").}
+#'   \item{\code{elaborate}}{Whether the majority of users post elaborate content ("yes"/"no").}
+
 #'   \item{\code{confidence}}{Model-estimated confidence score between 0 and 1.}
 #'   \item{\code{text}}{Input text provided to the model (either slice or aggregated JSON).}
 #'   \item{\code{is_valid_json}}{Logical flag indicating successful JSON validation.}
@@ -768,8 +813,8 @@ label_communities <- function(groups_data,
                               max_chars = 1000,
                               min_share = NULL,
                               model = "llama3.2:3b",
-                              retries = 3, 
-                              retry_trunc = 4000, 
+                              retries = 3,
+                              retry_trunc = 4000,
                               seed = 42,
                               temp = 0.0,
                               prompt = NULL,
@@ -780,134 +825,65 @@ label_communities <- function(groups_data,
                               answer = NULL,
                               answer_slices = NULL,
                               schema = NULL,
+                              keep_description_json = FALSE,
                               verbose = TRUE) {
-  
+
   if (!"user_labels" %in% names(groups_data)) {
     stop("No 'user_labels' found. Please first sample content by 'sample_user_text'.")
   }
-  
+
   # Set prompts and examples
-  if(is.null(prompt)){
+  if (is.null(prompt)) {
     prompt_comm <- prompts$prompt_comm
-  }else{
+  } else {
     prompt_comm <- prompt
   }
-  
-  if(is.null(system)){
+
+  if (is.null(system)) {
     system_comm <- prompts$system_comm
-  }else{
+  } else {
     system_comm <- system
   }
-  
-  if(is.null(system_slices)){
+
+  if (is.null(system_slices)) {
     system_comm_slices <- prompts$system_comm_slices
-  }else{
+  } else {
     system_comm_slices <- system_slices
   }
-  
-  if(is.null(example)){
+
+  if (is.null(example)) {
     example_comm_text <- examples$example_comm_text
-  }else{
+  } else {
     example_comm_text <- example
   }
-  
-  if(is.null(example_slices)){
+
+  if (is.null(example_slices)) {
     example_comm_slices_text <- examples$example_comm_slices_text
-  }else{
+  } else {
     example_comm_slices_text <- example_slices
   }
-  
-  if(is.null(answer)){
+
+  if (is.null(answer)) {
     example_comm_answer <- examples$example_comm_answer
-  }else{
+  } else {
     example_comm_answer <- answer
   }
-  
-  if(is.null(answer_slices)){
+
+  if (is.null(answer_slices)) {
     example_comm_slices_answer <- examples$example_comm_slices_answer
-  }else{
+  } else {
     example_comm_slices_answer <- answer_slices
   }
-  
-  if(is.null(schema)){
+
+  if (is.null(schema)) {
     schema_comm <- schemata$schema_comm
-  }else{
+  } else {
     schema_comm <- schema
   }
-  
-  # Calculate comm stats
-  post_data <- data.table::copy(groups_data$post_data)
-  comm_stats <- post_data[, .(
-    n_posts = data.table::uniqueN(post_id),
-    n_accs = data.table::uniqueN(account_id)
-  ), by = community]
-  
-  user_labels <- data.table::copy(groups_data$user_labels)
-  top_lang <- user_labels[, .N, by = .(community, lang)][
-    order(-N), .SD[1], by = community
-  ][, .(community, lang)]
-  
-  comm_stats <- top_lang[comm_stats, on = "community"]
-  
-  # Bind user texts to community texts
-  comm_texts <-  slice_community_text(
-    groups_data = groups_data,
-    max_n_per_slice = max_n_per_slice,
-    min_chars = min_chars,
-    max_chars = max_chars,
-    min_share = min_share,
-    verbose = verbose,
-    seed = seed)
-  
-  
-  # Ensure a clean, modifiable copy
-  comm_labels <- data.table::copy(comm_texts)
-  data.table::setDT(comm_labels)  # Coerce to data.table just in case
-  
-  # Create slice id
-  comm_labels <- comm_labels |> dplyr::mutate(id = paste0(community, "-", slice))
-  
-  if (!requireNamespace("rollama", quietly = TRUE)) {
-    stop("Package 'rollama' is required for this function. Please install it.")
-  }
-  
-  ping_res <- try(rollama::ping_ollama(), silent = TRUE)
-  if (!ping_res[[1]]) stop("Ollama is not running.")
-  
-  example_resp <- tibble::tibble(
-    text = example_comm_text, 
-    answer = example_comm_answer
-  )
-  
-  retry <- 0
-  res_all <- list()
-  comm_current <- comm_labels
-  
-  for (retry in 0:retries) {
-    
-    if (verbose) cli::cli_inform("Retry round {retry}. Querying {nrow(comm_current)} communities...")
-    
-    queries <- rollama::make_query(
-      text = comm_current$text_slice,
-      template = "{prefix}\n{text}\n{prompt}",
-      prompt = prompt_comm,
-      prefix = "Annotate:",
-      system = system_comm,
-      example = example_resp
-    )
-    
-    responses <- rollama::query(
-      queries,
-      model = model,
-      screen = TRUE,
-      model_params = list(seed = seed + retry, 
-                          temperature = temp + retry *(2e-2)),
-      format = schema_comm,
-      verbose = TRUE
-    )
-    
-    # Plucking
-    res_df <- comm_current |>
+
+  # Helper: parse one LLM response batch into a data.frame of extracted fields
+  parse_comm_responses <- function(df, responses, keep_json) {
+    df |>
       dplyr::mutate(
         response = purrr::map_chr(responses, ~ purrr::pluck(.x, "message", "content")),
         model = purrr::map_chr(responses, ~ purrr::pluck(.x, "model")),
@@ -920,42 +896,44 @@ label_communities <- function(groups_data,
           ~ tryCatch(jsonlite::fromJSON(.x), error = function(e) NULL)
         ),
         is_valid_json = purrr::map_lgl(response, jsonlite::validate),
-        
+
         # --- Scalar fields ---
-        label = purrr::map_chr(parsed_json, ~ .x$label %||% NA_character_),
-        description = purrr::map_chr(parsed_json, ~ .x$description %||% NA_character_),
-        lang = purrr::map_chr(parsed_json, ~ .x$lang %||% NA_character_),
-        #    emotion_valence = purrr::map_chr(parsed_json, ~ .x$emotion_valence %||% NA_character_),
-        incivility = purrr::map_chr(parsed_json, ~ .x$incivility %||% NA_character_),
-        elaborate = purrr::map_chr(parsed_json, ~ .x$elaborate %||% NA_character_),
-        confidence = purrr::map_dbl(parsed_json, ~ .x$confidence %||% NA_real_)
+        label       = purrr::map_chr(parsed_json, ~ .x$label %||% NA_character_),
+        description = purrr::map_chr(
+          parsed_json,
+          ~ .reconstruct_description_v2(.x, keep_json = keep_json)
+        ),
+        lang        = purrr::map_chr(parsed_json, ~ .x$lang %||% NA_character_),
+        incivility  = purrr::map_chr(parsed_json, ~ .x$incivility %||% NA_character_),
+        elaborate   = purrr::map_chr(parsed_json, ~ .x$elaborate %||% NA_character_),
+        confidence  = purrr::map_dbl(parsed_json, ~ .x$confidence %||% NA_real_)
       ) |>
       dplyr::mutate(
         # --- Topics ---
-        topic = purrr::map(parsed_json, ~ base::unlist(.x$topic) %||% character()),
+        topic   = purrr::map(parsed_json, ~ base::unlist(.x$topic) %||% character()),
         topic_1 = purrr::map_chr(topic, ~ .x[1] %||% NA_character_),
         topic_2 = purrr::map_chr(topic, ~ .x[2] %||% NA_character_),
         topic_3 = purrr::map_chr(topic, ~ .x[3] %||% NA_character_),
         topic_4 = purrr::map_chr(topic, ~ .x[4] %||% NA_character_),
         topic_5 = purrr::map_chr(topic, ~ .x[5] %||% NA_character_),
-        
+
         # --- Repetitive patterns ---
         repetitive_patterns = purrr::map(parsed_json, ~ base::unlist(.x$repetitive_patterns) %||% character()),
         pattern_1 = purrr::map_chr(repetitive_patterns, ~ .x[1] %||% NA_character_),
         pattern_2 = purrr::map_chr(repetitive_patterns, ~ .x[2] %||% NA_character_),
         pattern_3 = purrr::map_chr(repetitive_patterns, ~ .x[3] %||% NA_character_),
-        
+
         # --- Named entities ---
-        named_entities = purrr::map(parsed_json, ~ base::as.data.frame(.x$named_entities) %||% base::data.frame()),
-        named_entity_1 = purrr::map_chr(named_entities, ~ .x$entity[1] %||% NA_character_),
+        named_entities  = purrr::map(parsed_json, ~ base::as.data.frame(.x$named_entities) %||% base::data.frame()),
+        named_entity_1  = purrr::map_chr(named_entities, ~ .x$entity[1] %||% NA_character_),
         sentiment_1     = purrr::map_chr(named_entities, ~ .x$sentiment[1] %||% NA_character_),
-        named_entity_2 = purrr::map_chr(named_entities, ~ .x$entity[2] %||% NA_character_),
+        named_entity_2  = purrr::map_chr(named_entities, ~ .x$entity[2] %||% NA_character_),
         sentiment_2     = purrr::map_chr(named_entities, ~ .x$sentiment[2] %||% NA_character_),
-        named_entity_3 = purrr::map_chr(named_entities, ~ .x$entity[3] %||% NA_character_),
+        named_entity_3  = purrr::map_chr(named_entities, ~ .x$entity[3] %||% NA_character_),
         sentiment_3     = purrr::map_chr(named_entities, ~ .x$sentiment[3] %||% NA_character_),
-        named_entity_4 = purrr::map_chr(named_entities, ~ .x$entity[4] %||% NA_character_),
+        named_entity_4  = purrr::map_chr(named_entities, ~ .x$entity[4] %||% NA_character_),
         sentiment_4     = purrr::map_chr(named_entities, ~ .x$sentiment[4] %||% NA_character_),
-        named_entity_5 = purrr::map_chr(named_entities, ~ .x$entity[5] %||% NA_character_),
+        named_entity_5  = purrr::map_chr(named_entities, ~ .x$entity[5] %||% NA_character_),
         sentiment_5     = purrr::map_chr(named_entities, ~ .x$sentiment[5] %||% NA_character_)
       ) |>
       dplyr::select(
@@ -963,220 +941,235 @@ label_communities <- function(groups_data,
         -topic,
         -repetitive_patterns,
         -named_entities
+      ) |>
+      # Invalidate rows where label or description are missing/empty
+      dplyr::mutate(
+        is_valid_json = dplyr::if_else(
+          is.na(label) | is.na(description) | label == "" | description == "",
+          FALSE,
+          is_valid_json
+        )
       )
-    
-    
-    res_df <- res_df |> dplyr::mutate(l_d = sapply(description, length),
-                                      l_l = sapply(label, length),
-                                      is_valid_json = ifelse(l_d + l_l != 2, FALSE, is_valid_json)) |> 
-      dplyr::select(-l_d, -l_l)
-    
+  }
+
+  # Calculate comm stats
+  post_data  <- data.table::copy(groups_data$post_data)
+  comm_stats <- post_data[, .(
+    n_posts = data.table::uniqueN(post_id),
+    n_accs  = data.table::uniqueN(account_id)
+  ), by = community]
+
+  user_labels <- data.table::copy(groups_data$user_labels)
+  top_lang <- user_labels[, .N, by = .(community, lang)][
+    order(-N), .SD[1], by = community
+  ][, .(community, lang)]
+
+  comm_stats <- top_lang[comm_stats, on = "community"]
+
+  # Build community text slices
+  comm_texts <- slice_community_text(
+    groups_data    = groups_data,
+    max_n_per_slice = max_n_per_slice,
+    min_chars      = min_chars,
+    max_chars      = max_chars,
+    min_share      = min_share,
+    verbose        = verbose,
+    seed           = seed
+  )
+
+  comm_labels <- data.table::copy(comm_texts)
+  data.table::setDT(comm_labels)
+  comm_labels <- comm_labels |> dplyr::mutate(id = paste0(community, "-", slice))
+
+  if (!requireNamespace("rollama", quietly = TRUE)) {
+    stop("Package 'rollama' is required for this function. Please install it.")
+  }
+
+  ping_res <- try(rollama::ping_ollama(), silent = TRUE)
+  if (!ping_res[[1]]) stop("Ollama is not running.")
+
+  example_resp <- tibble::tibble(
+    text   = example_comm_text,
+    answer = example_comm_answer
+  )
+
+  # -------------------------------------------------------------------------
+  # Stage 1: Label each slice
+  # -------------------------------------------------------------------------
+  res_all      <- list()
+  comm_current <- comm_labels
+
+  for (retry in 0:retries) {
+
+    if (verbose) cli::cli_inform("Retry round {retry}. Querying {nrow(comm_current)} communities...")
+
+   queries <- rollama::make_query(
+      text = paste0("\n### EXAMPLES END ###\n\n", ### Clarify example boundaries to prevent context contamination
+                    "### NEW INPUT ###\n",
+                    "Annotate: \n",
+                    comm_current$text_slice),
+      template = "\n{text}\n{prompt}",
+      prompt = prompt_comm,
+      system = paste0(system_comm, 
+                      "\n### EXAMPLES START ###\n"),
+      example = example_resp
+    )
+
+    responses <- rollama::query(
+      queries,
+      model        = model,
+      screen       = TRUE,
+      model_params = list(seed = seed + retry, temperature = temp + retry * (2e-2)),
+      format       = schema_comm,
+      verbose      = TRUE
+    )
+
+    res_df <- parse_comm_responses(comm_current, responses, keep_description_json)
+
     res_all[[retry + 1]] <- res_df
-    
+
     if (all(res_df$is_valid_json)) {
       if (verbose) cli::cli_inform("All answers parsed successfully.")
       break
     }
-    
-    # Prepare failed users for retry
+
     failed_ids <- dplyr::filter(res_df, !is_valid_json)$id
     if (length(failed_ids) == 0 || retry == retries) {
       if (verbose) cli::cli_inform("Stopping after retry {retry}.")
       break
     }
-    
+
     comm_current <- comm_labels |>
       dplyr::filter(id %in% failed_ids) |>
       dplyr::mutate(text_slice = stringr::str_trunc(text_slice, retry_trunc))
   }
-  
-  
-  res_df <- dplyr::bind_rows(res_all)
-  
-  # De-duplicate (for parsing errors)
-  res_df <- res_df |>
+
+  res_df <- dplyr::bind_rows(res_all) |>
     dplyr::group_by(id) |>
     dplyr::slice_max(order_by = is_valid_json, n = 1, with_ties = FALSE) |>
-    dplyr::ungroup() |> 
+    dplyr::ungroup() |>
     dplyr::arrange(community)
-  
-  
+
   res_dt <- data.table::as.data.table(res_df)
-  
-  # Split sliced and unsliced communities
-  sliced_dt <- res_dt[res_dt[, .N, by = community][N > 1], on = "community"]
+
+  # Split sliced vs. unsliced communities
+  sliced_dt   <- res_dt[res_dt[, .N, by = community][N > 1],  on = "community"]
   unsliced_dt <- res_dt[res_dt[, .N, by = community][N == 1], on = "community"]
-  
-  # Process sliced data
-  if(nrow(sliced_dt) > 0){
-    
-    if(verbose) cli::cli_inform("Aggregating {nrow(sliced_dt)} slices.")
-    
+
+  # -------------------------------------------------------------------------
+  # Stage 2: Aggregate sliced communities
+  # -------------------------------------------------------------------------
+  if (nrow(sliced_dt) > 0) {
+
+    if (verbose) cli::cli_inform("Aggregating {nrow(sliced_dt)} slices.")
+
     sliced_dt <- sliced_dt[nchar(text_slice) >= min_chars]
-    
-    # Aggregate
+
     sliced_dt_agg <- sliced_dt[
       , .(
         sum_user_share_comm_total = sum(sum_user_share_comm, na.rm = TRUE),
-        
-        # Build a proper JSON array of slice summaries
         text = jsonlite::toJSON(
           lapply(seq_len(.N), function(i) {
-            list(
-              slice = slice[i],
-              share = round(sum_user_share_comm[i] * 100, 1),
-              label = label[i],
-              description = description[i]
+            parsed <- tryCatch(jsonlite::fromJSON(response[i]), error = function(e) list())
+            parsed$confidence <- NULL
+            c(
+              list(
+                slice = slice[i],
+                share = round(sum_user_share_comm[i] * 100, 1)
+              ),
+              parsed
             )
           }),
           auto_unbox = TRUE,
-          pretty = FALSE
+          pretty     = FALSE
         )
       ),
       by = community
     ]
-    
+
     example_slices_resp <- tibble::tibble(
-      text = example_comm_slices_text, 
+      text   = example_comm_slices_text,
       answer = example_comm_slices_answer
     )
-    
-    retry <- 0
-    res_all <- list()
-    comm_current <- sliced_dt_agg
-    
+
+    res_all_slices  <- list()
+    comm_current    <- sliced_dt_agg
+
     for (retry in 0:retries) {
-      
+
       if (verbose) cli::cli_inform("Retry round {retry}. Aggregating labels for {nrow(comm_current)} communities...")
       
       queries <- rollama::make_query(
-        text = comm_current$text,
-        template = "{prefix}\n{text}\n{prompt}",
+        text = paste0("\n### EXAMPLES END ###\n\n", ### Clarify example boundaries to prevent context contamination
+                      "### NEW INPUT ###\n",
+                      "Annotate: \n",
+                      comm_current$text),
+        template = "\n{text}\n{prompt}",
         prompt = prompt_comm,
-        prefix = "Annotate:",
-        system = system_comm_slices,
+        system = paste0(system_comm_slices, 
+                        "\n### EXAMPLES START ###\n"),
         example = example_slices_resp
       )
-      
+
       responses <- rollama::query(
         queries,
-        model = model,
-        screen = TRUE,
-        model_params = list(seed = seed + retry, 
-                            temperature = temp),
-        format = schema_comm,
-        verbose = TRUE
+        model        = model,
+        screen       = TRUE,
+        model_params = list(seed = seed + retry, temperature = temp),
+        format       = schema_comm,
+        verbose      = TRUE
       )
-      
-      # Plucking
-      res_df <- comm_current |>
-        dplyr::mutate(
-          response = purrr::map_chr(responses, ~ purrr::pluck(.x, "message", "content")),
-          model = purrr::map_chr(responses, ~ purrr::pluck(.x, "model")),
-          model_queried_at = purrr::map_chr(responses, ~ purrr::pluck(.x, "created_at")),
-          model_total_duration = purrr::map_dbl(responses, ~ purrr::pluck(.x, "total_duration"))
-        ) |>
-        dplyr::mutate(
-          parsed_json = purrr::map(
-            response,
-            ~ tryCatch(jsonlite::fromJSON(.x), error = function(e) NULL)
-          ),
-          is_valid_json = purrr::map_lgl(response, jsonlite::validate),
-          
-          # --- Scalar fields ---
-          label = purrr::map_chr(parsed_json, ~ .x$label %||% NA_character_),
-          description = purrr::map_chr(parsed_json, ~ .x$description %||% NA_character_),
-          lang = purrr::map_chr(parsed_json, ~ .x$lang %||% NA_character_),
-          #    emotion_valence = purrr::map_chr(parsed_json, ~ .x$emotion_valence %||% NA_character_),
-          incivility = purrr::map_chr(parsed_json, ~ .x$incivility %||% NA_character_),
-          elaborate = purrr::map_chr(parsed_json, ~ .x$elaborate %||% NA_character_),
-          confidence = purrr::map_dbl(parsed_json, ~ .x$confidence %||% NA_real_)
-        ) |>
-        dplyr::mutate(
-          # --- Topics ---
-          topic = purrr::map(parsed_json, ~ base::unlist(.x$topic) %||% character()),
-          topic_1 = purrr::map_chr(topic, ~ .x[1] %||% NA_character_),
-          topic_2 = purrr::map_chr(topic, ~ .x[2] %||% NA_character_),
-          topic_3 = purrr::map_chr(topic, ~ .x[3] %||% NA_character_),
-          topic_4 = purrr::map_chr(topic, ~ .x[4] %||% NA_character_),
-          topic_5 = purrr::map_chr(topic, ~ .x[5] %||% NA_character_),
-          
-          # --- Repetitive patterns ---
-          repetitive_patterns = purrr::map(parsed_json, ~ base::unlist(.x$repetitive_patterns) %||% character()),
-          pattern_1 = purrr::map_chr(repetitive_patterns, ~ .x[1] %||% NA_character_),
-          pattern_2 = purrr::map_chr(repetitive_patterns, ~ .x[2] %||% NA_character_),
-          pattern_3 = purrr::map_chr(repetitive_patterns, ~ .x[3] %||% NA_character_),
-          
-          # --- Named entities ---
-          named_entities = purrr::map(parsed_json, ~ base::as.data.frame(.x$named_entities) %||% base::data.frame()),
-          named_entity_1 = purrr::map_chr(named_entities, ~ .x$entity[1] %||% NA_character_),
-          sentiment_1     = purrr::map_chr(named_entities, ~ .x$sentiment[1] %||% NA_character_),
-          named_entity_2 = purrr::map_chr(named_entities, ~ .x$entity[2] %||% NA_character_),
-          sentiment_2     = purrr::map_chr(named_entities, ~ .x$sentiment[2] %||% NA_character_),
-          named_entity_3 = purrr::map_chr(named_entities, ~ .x$entity[3] %||% NA_character_),
-          sentiment_3     = purrr::map_chr(named_entities, ~ .x$sentiment[3] %||% NA_character_),
-          named_entity_4 = purrr::map_chr(named_entities, ~ .x$entity[4] %||% NA_character_),
-          sentiment_4     = purrr::map_chr(named_entities, ~ .x$sentiment[4] %||% NA_character_),
-          named_entity_5 = purrr::map_chr(named_entities, ~ .x$entity[5] %||% NA_character_),
-          sentiment_5     = purrr::map_chr(named_entities, ~ .x$sentiment[5] %||% NA_character_)
-        ) |>
-        dplyr::select(
-          -parsed_json,
-          -topic,
-          -repetitive_patterns,
-          -named_entities
-        )
-      
-      
-      res_df <- res_df |> dplyr::mutate(l_d = sapply(description, length),
-                                        l_l = sapply(label, length),
-                                        is_valid_json = ifelse(l_d + l_l != 2, FALSE, is_valid_json)) |> 
-        dplyr::select(-l_d, -l_l)
-      
-      res_all[[retry + 1]] <- res_df
-      
+
+      res_df <- parse_comm_responses(comm_current, responses, keep_description_json)
+
+      res_all_slices[[retry + 1]] <- res_df
+
       if (all(res_df$is_valid_json)) {
         if (verbose) cli::cli_inform("All answers parsed successfully.")
         break
       }
-      
-      # Prepare failed users for retry
+
       failed_ids <- dplyr::filter(res_df, !is_valid_json)$community
       if (length(failed_ids) == 0 || retry == retries) {
         if (verbose) cli::cli_inform("Stopping after retry {retry}.")
         break
       }
-      
+
       comm_current <- sliced_dt_agg |>
         dplyr::filter(community %in% failed_ids) |>
         dplyr::mutate(text = stringr::str_trunc(text, retry_trunc))
     }
-    
-    res_df <- dplyr::bind_rows(res_all)
-    
-    # De-duplicate (for parsing errors)
-    res_df <- res_df |>
+
+    res_df <- dplyr::bind_rows(res_all_slices) |>
       dplyr::group_by(community) |>
       dplyr::slice_max(order_by = is_valid_json, n = 1, with_ties = FALSE) |>
-      dplyr::ungroup() |> 
+      dplyr::ungroup() |>
       dplyr::arrange(community)
-    
+
     sliced_dt <- data.table::as.data.table(res_df)
-    
-    # Harmonize variables
-    sliced_dt[, sum_user_share_comm  := sum_user_share_comm_total][, c("sum_user_share_comm_total") := NULL]
-    unsliced_dt[, text := text_slice][, c("text_slice", "id", "slice", "n", "N") := NULL]
-    
-    ## Bind together
-    res_dt <- data.table::rbindlist(list(sliced_dt, unsliced_dt), use.names = T, fill = T, ignore.attr = T)
-    
-  }else{
-    res_dt <- unsliced_dt[, text := text_slice][, c("text_slice", "id", "slice", "n", "N") := NULL]
+
+    # Harmonize variable names before binding
+    sliced_dt[, sum_user_share_comm := sum_user_share_comm_total][
+      , c("sum_user_share_comm_total") := NULL
+    ]
+    unsliced_dt[, text := text_slice][
+      , c("text_slice", "id", "slice", "n", "N") := NULL
+    ]
+
+    res_dt <- data.table::rbindlist(
+      list(sliced_dt, unsliced_dt),
+      use.names = TRUE, fill = TRUE, ignore.attr = TRUE
+    )
+
+  } else {
+    res_dt <- unsliced_dt[, text := text_slice][
+      , c("text_slice", "id", "slice", "n", "N") := NULL
+    ]
   }
-  
+
   res_dt <- merge(res_dt, comm_stats, by = "community", all.x = TRUE)
-  
-  # Define your preferred column order
+
+  # Define column order
   main_cols <- c(
     "community", "n_accs", "n_posts", "sum_user_share_comm",
     "label", "description"
@@ -1185,269 +1178,34 @@ label_communities <- function(groups_data,
     "is_valid_json", "response", "text",
     "model", "model_queried_at", "model_total_duration"
   )
-  
-  # Compute the remaining columns dynamically
-  other_cols <- setdiff(names(res_dt), c(main_cols, end_cols))
-  
-  # Combine into final order
+  other_cols      <- setdiff(names(res_dt), c(main_cols, end_cols))
   final_col_order <- c(main_cols, other_cols, end_cols)
-  
-  # Reorder the data.table
-  res_dt <- res_dt[, ..final_col_order]
-  
+  res_dt          <- res_dt[, ..final_col_order]
+
   groups_data$community_labels <- res_dt
-  
+
   return(groups_data)
 }
 
 
-
-
-
-
-# Internal function: LLM-annotate community slices with minimal overhead
-#
-# @param slice_dt data.table or data.frame with one or more rows. Required columns:
-#   - text_slice: character, the JSON text to annotate
-#   - id: character, unique identifier for each slice (can be specified via id_col parameter)
-# @param id_col Character. Name of the column to use as slice identifier. Default "id".
-# @param model Character. LLM model name. Default "llama3.2:3b".
-# @param prompt Character. User prompt for annotation. If NULL, uses prompts$prompt_comm. 
-#   For custom prompts, pass your own string.
-# @param system Character. System prompt. If NULL, uses prompts$system_comm.
-#   For custom system prompts, pass your own string.
-# @param example Character vector. Few-shot examples. If NULL, uses examples$example_comm_text.
-#   For custom examples, pass your own character vector.
-# @param answer Character vector. Few-shot answers. If NULL, uses examples$example_comm_answer.
-#   For custom answers, pass your own character vector.
-# @param schema List. JSON schema for output. If NULL, uses schemata$schema_comm.
-#   For custom schema, pass your own list.
-# @param seed Integer. Random seed. Default 42.
-# @param temp Numeric. Temperature. Default 0.0.
-# @param retries Integer. Max retries. Default 3.
-# @param retry_trunc Integer. Char limit on retry. Default 4000.
-# @param verbose Logical. Print messages. Default FALSE.
-#
-# @return data.table with parsed LLM responses merged with input slice metadata
-#
-# @details All prompt parameters (prompt, system, example, answer, schema) can be customized 
-#   for prompt engineering. When NULL, they use package defaults. When provided, your custom 
-#   values are used directly without modification.
-#   
-#   The function processes each slice independently and combines results. JSON text is cleaned
-#   of tabs, linebreaks, and extra whitespace before annotation.
-#
-# @examples
-# \dontrun{
-# # With default prompts
-# result <- .label_slice(comm_slices)
-#
-# # With custom prompt and id column
-# result <- .label_slice(
-#   comm_slices,
-#   id_col = "slice_id",
-#   prompt = "Provide a 3-word label:",
-#   system = "You are a labeling expert."
-# )
-# }
-.label_slice <- function(slice_dt,
-                         id_col = "id",
-                         model = "llama3.2:3b",
-                         prompt = NULL,
-                         system = NULL,
-                         example = NULL,
-                         answer = NULL,
-                         schema = NULL,
-                         seed = 42,
-                         temp = 0.0,
-                         retries = 3,
-                         retry_trunc = 4000,
-                         verbose = FALSE) {
-  
-  # Validate input
-  if (!"text_slice" %in% names(slice_dt)) stop("slice_dt must contain 'text_slice' column")
-  if (!id_col %in% names(slice_dt)) stop(sprintf("slice_dt must contain '%s' column (specified by id_col)", id_col))
-  
-  # Ensure data.table
-  slice_dt <- data.table::as.data.table(slice_dt)
-  
-  # Rename id column to 'id' for internal use
-  if (id_col != "id") {
-    data.table::setnames(slice_dt, old = id_col, new = "id")
-  }
-  
-  # Clean text_slice: remove tabs, linebreaks, and compress whitespace
-  slice_dt[, text_slice_clean := stringr::str_replace_all(text_slice, "[\\t\\r\\n]+", " ")]
-  slice_dt[, text_slice_clean := stringr::str_squish(text_slice_clean)]
-  
-  
-  # Set defaults from package data (only if user didn't provide custom values)
-  if (is.null(prompt)) {
-    prompt_comm <- prompts$prompt_comm
-  } else {
-    prompt_comm <- prompt
-  }
-  
-  if (is.null(system)) {
-    system_comm <- prompts$system_comm
-  } else {
-    system_comm <- system
-  }
-  
-  if (is.null(example)) {
-    example_comm_text <- examples$example_comm_text
-  } else {
-    example_comm_text <- example
-  }
-  
-  if (is.null(answer)) {
-    example_comm_answer <- examples$example_comm_answer
-  } else {
-    example_comm_answer <- answer
-  }
-  
-  if (is.null(schema)) {
-    schema_comm <- schemata$schema_comm
-  } else {
-    schema_comm <- schema
-  }
-  
-  if (!requireNamespace("rollama", quietly = TRUE)) {
-    stop("Package 'rollama' is required.")
-  }
-  
-  ping_res <- try(rollama::ping_ollama(), silent = TRUE)
-  if (!ping_res[[1]]) stop("Ollama is not running.")
-  
-  example_resp <- tibble::tibble(
-    text = example_comm_text,
-    answer = example_comm_answer
-  )
-  
-  # Process each slice
-  all_results <- list()
-  
-  for (i in seq_len(nrow(slice_dt))) {
-    id <- slice_dt$id[i]
-    text <- slice_dt$text_slice_clean[i]
-    
-    if (verbose) cli::cli_inform("Processing slice {i}/{nrow(slice_dt)}: {id}")
-    
-    # Retry loop for this slice
-    res_all <- list()
-    current_text <- text
-    
-    for (retry in 0:retries) {
-      if (verbose && retry > 0) cli::cli_inform("  Retry {retry} for slice {id}...")
-      
-      queries <- rollama::make_query(
-        text = current_text,
-        template = "{prefix}\n{text}\n{prompt}",
-        prompt = prompt_comm,
-        prefix = "Annotate:",
-        system = system_comm,
-        example = example_resp
-      )
-      
-      responses <- rollama::query(
-        queries,
-        model = model,
-        screen = FALSE,
-        model_params = list(seed = seed + retry, temperature = temp + retry * (2e-2)),
-        format = schema_comm,
-        verbose = verbose
-      )
-      
-      # Parse response
-      res_df <- tibble::tibble(
-        id = id,
-        response = purrr::pluck(responses[[1]], "message", "content"),
-        model = purrr::pluck(responses[[1]], "model"),
-        model_queried_at = purrr::pluck(responses[[1]], "created_at"),
-        model_total_duration = purrr::pluck(responses[[1]], "total_duration")
-      ) |>
-        dplyr::mutate(
-          parsed_json = purrr::map(
-            response,
-            ~ tryCatch(jsonlite::fromJSON(.x), error = function(e) NULL)
-          ),
-          is_valid_json = purrr::map_lgl(response, jsonlite::validate),
-          
-          # Scalar fields
-          label = purrr::map_chr(parsed_json, ~ .x$label %||% NA_character_),
-          description = purrr::map_chr(parsed_json, ~ .x$description %||% NA_character_),
-          lang = purrr::map_chr(parsed_json, ~ .x$lang %||% NA_character_),
-          incivility = purrr::map_chr(parsed_json, ~ .x$incivility %||% NA_character_),
-          elaborate = purrr::map_chr(parsed_json, ~ .x$elaborate %||% NA_character_),
-          confidence = purrr::map_dbl(parsed_json, ~ .x$confidence %||% NA_real_)
-        ) |>
-        dplyr::mutate(
-          # Topics
-          topic = purrr::map(parsed_json, ~ base::unlist(.x$topic) %||% character()),
-          topic_1 = purrr::map_chr(topic, ~ .x[1] %||% NA_character_),
-          topic_2 = purrr::map_chr(topic, ~ .x[2] %||% NA_character_),
-          topic_3 = purrr::map_chr(topic, ~ .x[3] %||% NA_character_),
-          topic_4 = purrr::map_chr(topic, ~ .x[4] %||% NA_character_),
-          topic_5 = purrr::map_chr(topic, ~ .x[5] %||% NA_character_),
-          
-          # Repetitive patterns
-          repetitive_patterns = purrr::map(parsed_json, ~ base::unlist(.x$repetitive_patterns) %||% character()),
-          pattern_1 = purrr::map_chr(repetitive_patterns, ~ .x[1] %||% NA_character_),
-          pattern_2 = purrr::map_chr(repetitive_patterns, ~ .x[2] %||% NA_character_),
-          pattern_3 = purrr::map_chr(repetitive_patterns, ~ .x[3] %||% NA_character_),
-          
-          # Named entities
-          named_entities = purrr::map(parsed_json, ~ base::as.data.frame(.x$named_entities) %||% base::data.frame()),
-          named_entity_1 = purrr::map_chr(named_entities, ~ .x$entity[1] %||% NA_character_),
-          sentiment_1 = purrr::map_chr(named_entities, ~ .x$sentiment[1] %||% NA_character_),
-          named_entity_2 = purrr::map_chr(named_entities, ~ .x$entity[2] %||% NA_character_),
-          sentiment_2 = purrr::map_chr(named_entities, ~ .x$sentiment[2] %||% NA_character_),
-          named_entity_3 = purrr::map_chr(named_entities, ~ .x$entity[3] %||% NA_character_),
-          sentiment_3 = purrr::map_chr(named_entities, ~ .x$sentiment[3] %||% NA_character_),
-          named_entity_4 = purrr::map_chr(named_entities, ~ .x$entity[4] %||% NA_character_),
-          sentiment_4 = purrr::map_chr(named_entities, ~ .x$sentiment[4] %||% NA_character_),
-          named_entity_5 = purrr::map_chr(named_entities, ~ .x$entity[5] %||% NA_character_),
-          sentiment_5 = purrr::map_chr(named_entities, ~ .x$sentiment[5] %||% NA_character_)
-        ) |>
-        dplyr::select(-parsed_json, -topic, -repetitive_patterns, -named_entities)
-      
-      # Validate
-      res_df <- res_df |>
-        dplyr::mutate(
-          l_d = sapply(description, length),
-        l_l = sapply(label, length),
-        is_valid_json = ifelse(l_d + l_l != 2, FALSE, is_valid_json)
-      ) |>
-      dplyr::select(-l_d, -l_l)
-    
-    res_all[[retry + 1]] <- res_df
-      
-      res_all[[retry + 1]] <- res_df
-      
-      if (res_df$is_valid_json) {
-        if (verbose) cli::cli_inform("  Valid JSON received.")
-        break
-      }
-      
-      if (retry < retries) {
-        current_text <- stringr::str_trunc(current_text, retry_trunc)
-      }
-    }
-    
-    # Get best result for this slice
-    res_best <- dplyr::bind_rows(res_all) |>
-      dplyr::slice_max(order_by = is_valid_json, n = 1, with_ties = FALSE)
-    
-    all_results[[i]] <- res_best
-  }
-  
-  # Combine all results
-  res_combined <- dplyr::bind_rows(all_results)
-  res_dt <- data.table::as.data.table(res_combined)
-  
-  # Merge with original slice metadata (except text_slice_clean)
-  slice_meta <- slice_dt[, !c("text_slice_clean"), with = FALSE]
-  res_dt <- merge(slice_meta, res_dt, by = "id", all.y = TRUE)
-  
-  return(res_dt)
+#' Flatten a JSON Description String to Plain Text
+#'
+#' Parses a JSON string of the form `\{"sentence_1": "...", "sentence_2": "...", ...\}`
+#' and concatenates the values into a single space-separated string. Non-JSON strings
+#' and `NA` values are returned as-is.
+#'
+#' @param x Character vector of JSON strings (or plain text) to flatten.
+#'
+#' @return A character vector of the same length as \code{x}.
+#'
+#' @export
+flatten_description <- function(x) {
+  vapply(x, function(s) {
+    if (is.na(s) || !jsonlite::validate(s)) return(s)
+    parsed <- tryCatch(jsonlite::fromJSON(s), error = function(e) NULL)
+    if (is.null(parsed)) return(s)
+    sentences <- unlist(parsed, use.names = FALSE)
+    sentences <- sentences[nzchar(sentences)]
+    paste(sentences, collapse = " ")
+  }, character(1), USE.NAMES = FALSE)
 }

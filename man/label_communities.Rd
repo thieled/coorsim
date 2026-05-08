@@ -23,6 +23,7 @@ label_communities(
   answer = NULL,
   answer_slices = NULL,
   schema = NULL,
+  keep_description_json = FALSE,
   verbose = TRUE
 )
 }
@@ -60,7 +61,7 @@ Default is \code{4000}.}
 \item{prompt}{Character. User-level prompt text used to instruct the model when labeling
 communities (overrides internal \code{prompts$prompt_comm}). Optional.}
 
-\item{system}{Character. System-level instruction guiding the model’s behavior
+\item{system}{Character. System-level instruction guiding the model's behavior
 (overrides internal \code{prompts$system_comm}). Optional.}
 
 \item{system_slices}{Character. Optional override for \code{prompts$system_comm_slices},
@@ -81,6 +82,11 @@ Defaults to \code{examples$example_comm_slices_answer}.}
 \item{schema}{Optional JSON-like list defining the expected structured output format.
 Defaults to \code{schemata$schema_comm}.}
 
+\item{keep_description_json}{Logical. If \code{FALSE} (default), extracts and concatenates
+sentences from structured description objects into clean text. If \code{TRUE}, preserves JSON
+structure as text. Only relevant when description is returned as a JSON object with
+sentence_1 through sentence_5 fields.}
+
 \item{verbose}{Logical. Whether to print progress messages, retry information,
 and aggregation updates. Default is \code{TRUE}.}
 }
@@ -90,13 +96,13 @@ This is a \pkg{data.table} with one row per labeled community containing:
 \describe{
   \item{\code{community}}{Community identifier.}
   \item{\code{label}}{LLM-generated label for the community.}
-  \item{\code{description}}{Concise LLM-generated summary of the community’s tone, style, and main topics.}
+  \item{\code{description}}{Concise LLM-generated summary of the community's tone, style, and main topics.}
   \item{\code{lang}}{Predominant language inferred by the model.}
   \item{\code{topic_1–topic_5}}{Up to five thematic categories assigned by the model.}
   \item{\code{named_entity_1–named_entity_5}, \code{sentiment_1–sentiment_5}}{Named entities and associated sentiments.}
   \item{\code{pattern_1–pattern_3}}{Recurring emojis, slogans, or stylistic markers.}
-  \item{\code{incivility}}{Whether the community often uses uncivil or offensive language.}
-  \item{\code{elaborate}}{Average linguistic elaboration level ("simple", "moderate", or "elaborate").}
+  \item{\code{incivility}}{Whether the majority of users use uncivil or offensive language ("yes"/"no").}
+  \item{\code{elaborate}}{Whether the majority of users post elaborate content ("yes"/"no").}
   \item{\code{confidence}}{Model-estimated confidence score between 0 and 1.}
   \item{\code{text}}{Input text provided to the model (either slice or aggregated JSON).}
   \item{\code{is_valid_json}}{Logical flag indicating successful JSON validation.}

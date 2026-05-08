@@ -6,7 +6,7 @@
 \usage{
 label_users(
   groups_data,
-  model = "llama3.2:3b",
+  model = "llama3.1:8b",
   prompt = NULL,
   system = NULL,
   example = NULL,
@@ -26,7 +26,7 @@ typically produced by [sample_user_text()]. This element must include a column \
 with sampled user content and an \code{account_id} column.}
 
 \item{model}{Character string. Name of the local LLM model to be queried via Ollama. 
-Default is \code{"llama3.2:3b"}.}
+Default is \code{"llama3.1:8b"}.}
 
 \item{prompt}{Optional character string providing user-facing task instructions 
 (defaults to the internal \code{prompts$prompt_user}).}
@@ -86,7 +86,7 @@ and a predefined schema to produce machine-readable JSON output describing each 
 \details{
 The model should run via an active \emph{Ollama} Docker container with GPU (CUDA) support.
 Use `system("docker ps")` to verify that Ollama is running, and ensure that the 
-desired model (e.g., `"llama3.2:3b"`) has been pulled via Ollama before executing this function.
+desired model (e.g., `"llama3.1:8b"`) has been pulled via Ollama before executing this function.
 
 
 The function constructs few-shot prompts by combining examples and instructions, sends them to the 
