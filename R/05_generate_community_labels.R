@@ -394,33 +394,6 @@ label_users <- function(groups_data,
   
   user_labels <- data.table::copy(groups_data$user_labels)
   
-  # NEW: Check if user_labels is empty
-  if (nrow(user_labels) == 0) {
-    if (verbose) cli::cli_warn("No user labels to process. Returning empty result.")
-    groups_data$user_labels <- user_labels[, `:=`(
-      description = character(),
-      lang = character(),
-      incivility = character(),
-      elaborate = character(),
-      confidence = numeric(),
-      topic_1 = character(), topic_2 = character(), topic_3 = character(),
-      topic_4 = character(), topic_5 = character(),
-      pattern_1 = character(), pattern_2 = character(), pattern_3 = character(),
-      named_entity_1 = character(), sentiment_1 = character(),
-      named_entity_2 = character(), sentiment_2 = character(),
-      named_entity_3 = character(), sentiment_3 = character(),
-      named_entity_4 = character(), sentiment_4 = character(),
-      named_entity_5 = character(), sentiment_5 = character(),
-      is_valid_json = logical(),
-      response = character(),
-      model = character(),
-      model_queried_at = character(),
-      model_total_duration = numeric(),
-      error_msg = character()
-    )]
-    return(groups_data)
-  }
-  
   # Helper function to process description field (handles both string and object formats)
   process_description <- function(desc, keep_json = FALSE) {
     if (is.null(desc)) return(NA_character_)
@@ -483,28 +456,13 @@ label_users <- function(groups_data,
       example = example_resp
     )
     
-    # NEW: Wrap query in tryCatch to handle connection failures
-    responses <- tryCatch(
-      rollama::query(
-        queries,
-        model = model,
-        screen = TRUE,
-        model_params = list(seed = seed + retry, temperature = temp),
-        verbose = TRUE,
-        format = schema_user
-      ),
-      error = function(e) {
-        if (verbose) cli::cli_warn("Query failed: {e$message}")
-        # Return empty response structure for each query
-        lapply(seq_len(nrow(user_current)), function(i) {
-          list(
-            message = list(content = "{}"),
-            model = model,
-            created_at = as.character(Sys.time()),
-            total_duration = NA_real_
-          )
-        })
-      }
+    responses <- rollama::query(
+      queries,
+      model = model,
+      screen = TRUE,
+      model_params = list(seed = seed + retry, temperature = temp),
+      verbose = TRUE,
+      format = schema_user
     )
     
     res_df <- user_current |>
@@ -565,17 +523,6 @@ label_users <- function(groups_data,
         -named_entities
       )
     
-    # NEW: Add error tracking for missing critical fields
-    res_df <- res_df |>
-      dplyr::mutate(
-        error_msg = dplyr::case_when(
-          !is_valid_json ~ "Failed to parse valid JSON",
-          is.na(description) | description == "" ~ "Missing description field",
-          is.na(lang) | lang == "" ~ "Missing lang field",
-          TRUE ~ NA_character_
-        )
-      )
-    
     res_all[[retry + 1]] <- res_df
     
     if (all(res_df$is_valid_json)) {
@@ -606,12 +553,6 @@ label_users <- function(groups_data,
     dplyr::arrange(community, -user_share_comm)
   
   res_dt <- data.table::as.data.table(res_df)
-  
-  # NEW: Final validation and warning for failures
-  n_failed <- sum(!res_dt$is_valid_json, na.rm = TRUE)
-  if (n_failed > 0 && verbose) {
-    cli::cli_warn("{n_failed} user(s) failed validation after all retries. Check error_msg column.")
-  }
   
   groups_data$user_labels <- res_dt
   
@@ -688,52 +629,18 @@ slice_community_text <- function(groups_data,
   user_labels <- data.table::copy(groups_data$user_labels)
   data.table::setDT(user_labels)  # Coerce to data.table just in case
   
-  # NEW: Check if user_labels is empty
-  if (nrow(user_labels) == 0) {
-    if (verbose) cli::cli_warn("No user labels available for slicing. Returning empty data.table.")
-    return(data.table::data.table(
-      community = integer(),
-      slice = integer(),
-      n = integer(),
-      sum_user_share_comm = numeric(),
-      text_slice = character()
-    ))
-  }
-  
   # Order and slice
   data.table::setorder(user_labels, community, -user_share_comm)
   user_labels[, slice := ceiling(seq_len(.N) / max_n_per_slice), by = community]
   
-  # NEW: Filter users with valid account_name_clean BEFORE processing
-  valid_users <- user_labels[nchar(account_name_clean) > 0 & !is.na(account_name_clean)]
-  
-  if (nrow(valid_users) == 0) {
-    if (verbose) cli::cli_warn("No users with valid account names after filtering. Returning empty data.table.")
-    return(data.table::data.table(
-      community = integer(),
-      slice = integer(),
-      n = integer(),
-      sum_user_share_comm = numeric(),
-      text_slice = character()
-    ))
-  }
-  
-  valid_users[
-    ,
+  user_labels[
+    nchar(account_name_clean) > 0 & !is.na(account_name_clean),
     response_wname := stringr::str_replace(
       response,
       pattern = "^\\{",  # replace only the first opening brace
       replacement = sprintf("{\"name\": \"%s\" , ", account_name_clean)
     )
   ]
-  
-  # Merge back with original for users without valid names
-  user_labels <- merge(
-    user_labels,
-    valid_users[, .(account_id, response_wname)],
-    by = "account_id",
-    all.x = TRUE
-  )
   
   # If name is empty or NA, just copy response
   user_labels[is.na(response_wname), response_wname := response]
@@ -744,13 +651,7 @@ slice_community_text <- function(groups_data,
     
     text_slice = jsonlite::toJSON(
       lapply(response_wname, function(x) {
-        obj <- tryCatch(
-          jsonlite::fromJSON(x),
-          error = function(e) {
-            # NEW: If JSON parsing fails, return minimal object
-            list(name = "unknown", error = "JSON parse failed")
-          }
-        )
+        obj <- jsonlite::fromJSON(x)
         
         # Drop unwanted fields at the top level
         obj[setdiff(names(obj), drop_fields)]
@@ -762,18 +663,6 @@ slice_community_text <- function(groups_data,
   
   if(!is.null(min_share)){
     comm_labels <- comm_labels[sum_user_share_comm >= min_share]
-  }
-  
-  # NEW: Check if filtering resulted in empty output
-  if (nrow(comm_labels) == 0) {
-    if (verbose) cli::cli_warn("No community slices remain after filtering (check min_share threshold).")
-    return(data.table::data.table(
-      community = integer(),
-      slice = integer(),
-      n = integer(),
-      sum_user_share_comm = numeric(),
-      text_slice = character()
-    ))
   }
   
   if (verbose) {
@@ -1088,12 +977,6 @@ label_communities <- function(groups_data,
     seed           = seed
   )
 
-  # NEW: Guard against empty slice output (e.g. all users filtered out)
-  if (nrow(comm_texts) == 0) {
-    cli::cli_warn("No community slices to label. Returning groups_data unchanged.")
-    return(groups_data)
-  }
-
   comm_labels <- data.table::copy(comm_texts)
   data.table::setDT(comm_labels)
   comm_labels <- comm_labels |> dplyr::mutate(id = paste0(community, "-", slice))
@@ -1132,27 +1015,13 @@ label_communities <- function(groups_data,
       example = example_resp
     )
 
-    # NEW: wrap query in tryCatch to handle connection/model failures
-    responses <- tryCatch(
-      rollama::query(
-        queries,
-        model        = model,
-        screen       = TRUE,
-        model_params = list(seed = seed + retry, temperature = temp + retry * (2e-2)),
-        format       = schema_comm,
-        verbose      = TRUE
-      ),
-      error = function(e) {
-        if (verbose) cli::cli_warn("Stage 1 query failed: {e$message}")
-        lapply(seq_len(nrow(comm_current)), function(i) {
-          list(
-            message        = list(content = "{}"),
-            model          = model,
-            created_at     = as.character(Sys.time()),
-            total_duration = NA_real_
-          )
-        })
-      }
+    responses <- rollama::query(
+      queries,
+      model        = model,
+      screen       = TRUE,
+      model_params = list(seed = seed + retry, temperature = temp + retry * (2e-2)),
+      format       = schema_comm,
+      verbose      = TRUE
     )
 
     res_df <- parse_comm_responses(comm_current, responses, keep_description_json)
@@ -1182,12 +1051,6 @@ label_communities <- function(groups_data,
     dplyr::arrange(community)
 
   res_dt <- data.table::as.data.table(res_df)
-
-  # NEW: warn about stage 1 failures
-  n_failed_s1 <- sum(!res_dt$is_valid_json, na.rm = TRUE)
-  if (n_failed_s1 > 0 && verbose) {
-    cli::cli_warn("{n_failed_s1} community slice(s) failed validation after all retries. Check error_msg column.")
-  }
 
   # Split sliced vs. unsliced communities
   sliced_dt   <- res_dt[res_dt[, .N, by = community][N > 1],  on = "community"]
@@ -1248,27 +1111,13 @@ label_communities <- function(groups_data,
         example = example_slices_resp
       )
 
-      # NEW: wrap aggregation query in tryCatch
-      responses <- tryCatch(
-        rollama::query(
-          queries,
-          model        = model,
-          screen       = TRUE,
-          model_params = list(seed = seed + retry, temperature = temp),
-          format       = schema_comm,
-          verbose      = TRUE
-        ),
-        error = function(e) {
-          if (verbose) cli::cli_warn("Stage 2 aggregation query failed: {e$message}")
-          lapply(seq_len(nrow(comm_current)), function(i) {
-            list(
-              message        = list(content = "{}"),
-              model          = model,
-              created_at     = as.character(Sys.time()),
-              total_duration = NA_real_
-            )
-          })
-        }
+      responses <- rollama::query(
+        queries,
+        model        = model,
+        screen       = TRUE,
+        model_params = list(seed = seed + retry, temperature = temp),
+        format       = schema_comm,
+        verbose      = TRUE
       )
 
       res_df <- parse_comm_responses(comm_current, responses, keep_description_json)
@@ -1299,12 +1148,6 @@ label_communities <- function(groups_data,
 
     sliced_dt <- data.table::as.data.table(res_df)
 
-    # NEW: warn about stage 2 failures
-    n_failed_s2 <- sum(!sliced_dt$is_valid_json, na.rm = TRUE)
-    if (n_failed_s2 > 0 && verbose) {
-      cli::cli_warn("{n_failed_s2} community/communities failed aggregation after all retries. Check error_msg column.")
-    }
-
     # Harmonize variable names before binding
     sliced_dt[, sum_user_share_comm := sum_user_share_comm_total][
       , c("sum_user_share_comm_total") := NULL
@@ -1332,22 +1175,12 @@ label_communities <- function(groups_data,
     "label", "description"
   )
   end_cols <- c(
-    "is_valid_json", "error_msg", "response", "text",
+    "is_valid_json", "response", "text",
     "model", "model_queried_at", "model_total_duration"
   )
   other_cols      <- setdiff(names(res_dt), c(main_cols, end_cols))
   final_col_order <- c(main_cols, other_cols, end_cols)
-  # NEW: only keep columns that actually exist (guards against error_msg missing in unsliced path)
-  final_col_order <- final_col_order[final_col_order %in% names(res_dt)]
   res_dt          <- res_dt[, ..final_col_order]
-
-  # NEW: final summary warning
-  n_failed_total <- sum(!res_dt$is_valid_json, na.rm = TRUE)
-  if (n_failed_total > 0 && verbose) {
-    cli::cli_warn(
-      "{n_failed_total} of {nrow(res_dt)} communities have invalid or incomplete labels. Check the error_msg column."
-    )
-  }
 
   groups_data$community_labels <- res_dt
 
