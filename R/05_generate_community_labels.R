@@ -456,21 +456,36 @@ label_users <- function(groups_data,
       example = example_resp
     )
     
-    responses <- rollama::query(
-      queries,
-      model = model,
-      screen = TRUE,
-      model_params = list(seed = seed + retry, temperature = temp),
-      verbose = TRUE,
-      format = schema_user
+    ### NEW: catch connection/streaming errors, return empty stubs so the loop continues
+    responses <- tryCatch(
+      rollama::query(
+        queries,
+        model = model,
+        screen = TRUE,
+        model_params = list(seed = seed + retry, temperature = temp),
+        verbose = TRUE,
+        format = schema_user
+      ),
+      error = function(e) {
+        if (verbose) cli::cli_warn("Query failed: {e$message}")
+        lapply(seq_len(nrow(user_current)), function(i) {
+          list(
+            message        = list(content = "{}"),
+            model          = model,
+            created_at     = as.character(Sys.time()),
+            total_duration = NA_real_
+          )
+        })
+      }
     )
-    
+
     res_df <- user_current |>
       dplyr::mutate(
-        response = purrr::map_chr(responses, ~ purrr::pluck(.x, "message", "content")),
-        model = purrr::map_chr(responses, ~ purrr::pluck(.x, "model")),
-        model_queried_at = purrr::map_chr(responses, ~ purrr::pluck(.x, "created_at")),
-        model_total_duration = purrr::map_dbl(responses, ~ purrr::pluck(.x, "total_duration"))
+        ### NEW: %||% fallbacks guard against NULL from pluck on stub or partial responses
+        response             = purrr::map_chr(responses, ~ purrr::pluck(.x, "message", "content") %||% "{}"),
+        model                = purrr::map_chr(responses, ~ purrr::pluck(.x, "model") %||% NA_character_),
+        model_queried_at     = purrr::map_chr(responses, ~ purrr::pluck(.x, "created_at") %||% NA_character_),
+        model_total_duration = purrr::map_dbl(responses, ~ purrr::pluck(.x, "total_duration") %||% NA_real_)
       ) |>
       dplyr::mutate(
         parsed_json = purrr::map(
@@ -478,7 +493,7 @@ label_users <- function(groups_data,
           ~ tryCatch(jsonlite::fromJSON(.x), error = function(e) NULL)
         ),
         is_valid_json = purrr::map_lgl(response, jsonlite::validate),
-        
+
         # --- Scalar fields ---
         description = purrr::map_chr(parsed_json, ~ process_description(.x$description, keep_description_json)),
         lang = purrr::map_chr(parsed_json, ~ .x$lang %||% NA_character_),
@@ -495,32 +510,38 @@ label_users <- function(groups_data,
         topic_3 = purrr::map_chr(topic, ~ .x[3] %||% NA_character_),
         topic_4 = purrr::map_chr(topic, ~ .x[4] %||% NA_character_),
         topic_5 = purrr::map_chr(topic, ~ .x[5] %||% NA_character_),
-        
+
         # --- Repetitive patterns ---
         repetitive_patterns = purrr::map(parsed_json, ~ base::unlist(.x$repetitive_patterns) %||% character()),
         pattern_1 = purrr::map_chr(repetitive_patterns, ~ .x[1] %||% NA_character_),
         pattern_2 = purrr::map_chr(repetitive_patterns, ~ .x[2] %||% NA_character_),
         pattern_3 = purrr::map_chr(repetitive_patterns, ~ .x[3] %||% NA_character_),
-        
+
         # --- Named entities ---
         named_entities = purrr::map(parsed_json, ~ base::as.data.frame(.x$named_entities) %||% base::data.frame()),
         named_entity_1 = purrr::map_chr(named_entities, ~ .x$entity[1] %||% NA_character_),
-        sentiment_1     = purrr::map_chr(named_entities, ~ .x$sentiment[1] %||% NA_character_),
+        sentiment_1    = purrr::map_chr(named_entities, ~ .x$sentiment[1] %||% NA_character_),
         named_entity_2 = purrr::map_chr(named_entities, ~ .x$entity[2] %||% NA_character_),
-        sentiment_2     = purrr::map_chr(named_entities, ~ .x$sentiment[2] %||% NA_character_),
+        sentiment_2    = purrr::map_chr(named_entities, ~ .x$sentiment[2] %||% NA_character_),
         named_entity_3 = purrr::map_chr(named_entities, ~ .x$entity[3] %||% NA_character_),
-        sentiment_3     = purrr::map_chr(named_entities, ~ .x$sentiment[3] %||% NA_character_),
+        sentiment_3    = purrr::map_chr(named_entities, ~ .x$sentiment[3] %||% NA_character_),
         named_entity_4 = purrr::map_chr(named_entities, ~ .x$entity[4] %||% NA_character_),
-        sentiment_4     = purrr::map_chr(named_entities, ~ .x$sentiment[4] %||% NA_character_),
+        sentiment_4    = purrr::map_chr(named_entities, ~ .x$sentiment[4] %||% NA_character_),
         named_entity_5 = purrr::map_chr(named_entities, ~ .x$entity[5] %||% NA_character_),
-        sentiment_5     = purrr::map_chr(named_entities, ~ .x$sentiment[5] %||% NA_character_)
-        
+        sentiment_5    = purrr::map_chr(named_entities, ~ .x$sentiment[5] %||% NA_character_)
       ) |>
       dplyr::select(
         -parsed_json,
         -topic,
         -repetitive_patterns,
         -named_entities
+      ) |>
+      ### NEW: record why a row failed
+      dplyr::mutate(
+        error_msg = dplyr::case_when(
+          !is_valid_json ~ "Failed to parse valid JSON",
+          TRUE           ~ NA_character_
+        )
       )
     
     res_all[[retry + 1]] <- res_df
@@ -541,7 +562,6 @@ label_users <- function(groups_data,
       dplyr::filter(account_id %in% failed_ids) |>
       dplyr::mutate(text = stringr::str_trunc(text, retry_trunc))
   }
-  
   
   res_df <- dplyr::bind_rows(res_all)
   
