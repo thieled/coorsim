@@ -224,10 +224,10 @@ sim_dt <- coorsim::detect_cosimilarity(
   content = "content",
   verbose = TRUE
 )
-#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [3ms]
-#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [14ms]
+#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [4ms]
+#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [15ms]
 #> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [16ms]
-#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [17ms]
+#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [18ms]
 
 # Clean up the embeddings directory
 if(dir.exists("data/emb")) unlink("data/emb", recursive = TRUE)
@@ -249,8 +249,8 @@ coord <- coorsim::coorsim_detect_groups(
   verbose = TRUE
 )
 #> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [9ms]
-#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [9ms]
-#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [38ms]
+#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [12ms]
+#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [43ms]
 #> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [8ms]
 #> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [6ms]   
 ```
@@ -266,7 +266,7 @@ p1
 #> Please use `theme()` to construct themes.
 ```
 
-<img src="man/figures/README-unnamed-chunk-4-1.png" width="100%" />
+<img src="man/figures/README-plot-1-1.png" width="100%" />
 
 ### Step 5: Sample Texts for Labeling Users and Communities
 
@@ -277,8 +277,8 @@ Sample post content and metadata to generate concise community labels.
 # Sampe users and posts
 coord <- coorsim::sample_user_text( 
   groups_data = coord, 
-  sampling_ratio_posts = .5, 
-  sampling_ratio_users = .5) ## use all users 
+  sampling_ratio_posts = .25,  # 25% of the post of that user
+  sampling_ratio_users = .25)  # 25% of the users of a community
 ```
 
 ### Step 6: Label Communities
@@ -286,27 +286,24 @@ coord <- coorsim::sample_user_text(
 Use a language model to generate labels for each identified community
 
 ``` r
-# Generate user descriptions, using llama3.1:8b
-coord <- coorsim::label_users(coord)
+# Generate user descriptions
+coord <- coorsim::label_users(coord, model = "llama3.2:3b-instruct-q8_0") # small model for readme only
 #> ▶ Ollama (v0.12.6) is running at <http://localhost:11434>!
-#> Retry round 0. Querying 5 users...
-#> ⠙ llama3.1:8b is thinking about 5/5 questions[ETA: ?]
-#> ⠹ llama3.1:8b is thinking about 5/5 questions[ETA: ?]
-#> ⠸ llama3.1:8b is thinking about 4/5 questions[ETA:  7m]
-#> ⠼ llama3.1:8b is thinking about 3/5 questions[ETA:  4m]
-#> ⠴ llama3.1:8b is thinking about 2/5 questions[ETA:  2m]
-#> ⠦ llama3.1:8b is thinking about 1/5 questions[ETA:  1m]
-#>                                                        
+#> Retry round 0. Querying 3 users...
+#> ⠙ llama3.2:3b-instruct-q8_0 is thinking about 3/3 questions[ETA: ?]
+#> ⠹ llama3.2:3b-instruct-q8_0 is thinking about 2/3 questions[ETA:  1m]
+#> ⠸ llama3.2:3b-instruct-q8_0 is thinking about 1/3 questions[ETA: 25s]
+#>                                                                      
 #> All answers parsed successfully.
 
-# Generate community labels, using llama3.1:8b 
-coord <- coorsim::label_communities(coord, model = "llama3.1:8b")
+# Generate community labels
+coord <- coorsim::label_communities(coord, model = "llama3.2:3b-instruct-q8_0")
 #> Returning 2 community texts to annotate.
 #> ▶ Ollama (v0.12.6) is running at <http://localhost:11434>!
 #> Retry round 0. Querying 2 communities...
-#> ⠙ llama3.1:8b is thinking about 2/2 questions[ETA: ?]
-#> ⠹ llama3.1:8b is thinking about 1/2 questions[ETA:  2m]
-#>                                                        
+#> ⠙ llama3.2:3b-instruct-q8_0 is thinking about 2/2 questions[ETA: ?]
+#> ⠹ llama3.2:3b-instruct-q8_0 is thinking about 1/2 questions[ETA: 29s]
+#>                                                                      
 #> All answers parsed successfully.
 ```
 
@@ -320,4 +317,4 @@ p2
 #> Please use `theme()` to construct themes.
 ```
 
-<img src="man/figures/README-plots-1.png" width="100%" />
+<img src="man/figures/README-plot-2-1.png" width="100%" />

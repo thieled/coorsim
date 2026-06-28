@@ -244,7 +244,7 @@ coord <- coorsim::coorsim_detect_groups(
 
 The package provides also a function to plot communities:
 
-```{r, eval=T}
+```{r plot-1, eval=T, fig.width=12, fig.height=8, dpi=300}
 p1 <- coorsim::plot_communities(coord)
 p1
 ```
@@ -257,24 +257,24 @@ Sample post content and metadata to generate concise community labels.
 # Sampe users and posts
 coord <- coorsim::sample_user_text( 
   groups_data = coord, 
-  sampling_ratio_posts = .5, 
-  sampling_ratio_users = .5) ## use all users 
+  sampling_ratio_posts = .25,  # 25% of the post of that user
+  sampling_ratio_users = .25)  # 25% of the users of a community
 
 ```
 
 ### Step 6: Label Communities
 Use a language model to generate labels for each identified community
 ```{r labelling, eval=T}
-# Generate user descriptions, using llama3.1:8b
-coord <- coorsim::label_users(coord)
+# Generate user descriptions
+coord <- coorsim::label_users(coord, model = "llama3.2:3b-instruct-q8_0") # small model for readme only
 
-# Generate community labels, using llama3.1:8b 
-coord <- coorsim::label_communities(coord, model = "llama3.1:8b")
+# Generate community labels
+coord <- coorsim::label_communities(coord, model = "llama3.2:3b-instruct-q8_0")
 
 ```
 
 ### Step 6: Visualize Community Network
-```{r plots, eval=T}
+```{r plot-2, eval=T, fig.width=12, fig.height=8, dpi=300}
 # Plot Communities
 p2 <- coorsim::plot_communities(coord)
 p2
