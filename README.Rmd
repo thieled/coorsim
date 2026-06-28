@@ -40,6 +40,8 @@ Below is an example of how to use coorsim to detect and analyze coordinated beha
 
 First, we create a toy dataset: 100 Tweets by 10 users. 5 out of the 10 users engage in 'coordinated posting behavior' and spread climate denialist content. The others also talk about other climate issues but are non-coordinated. 
 
+<details>
+<summary>Click to expand toy data creation</summary>
 
 ```{r example, eval=T}
 
@@ -167,6 +169,8 @@ users_df <- as.data.table(users_df)
 
 ```
 
+</details>
+
 ### Step 2: Get embeddings (optional)
 
 Next, we retrieve document embeddigs from transformer models.
@@ -191,7 +195,7 @@ emb_matrix <- coorsim::save_embeddings(tweets_df,
                                   batch_size = 16L, 
                                   max_length = 512L, 
                                   use_fp16 = T,
-                                  model_name = "sentence-transformers/paraphrase-TinyBERT-L6-v2", ## extra-small model for demostration purposes only  
+                                  model_name = "Twitter/twhin-bert-base", # "sentence-transformers/paraphrase-TinyBERT-L6-v2", 
                                   save_dir = "data/emb", 
                                   h5_fileprefix = "toy_sample_"
                                 )
@@ -211,7 +215,7 @@ sim_dt <- coorsim::detect_cosimilarity(
   data = tweets_df,
   embeddings = emb_file,
   time_window = 180, # 3 Minutes 
-  min_simil = 0.9, 
+  min_simil = 0.925, 
   min_participation = 1,
   post_id = "post_id",
   account_id = "account_id",

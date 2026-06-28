@@ -40,6 +40,13 @@ users engage in ‘coordinated posting behavior’ and spread climate
 denialist content. The others also talk about other climate issues but
 are non-coordinated.
 
+<details>
+
+<summary>
+
+Click to expand toy data creation
+</summary>
+
 ``` r
 
 library(data.table)
@@ -165,6 +172,8 @@ tweets_df <- as.data.table(tweets_df)
 users_df <- as.data.table(users_df)
 ```
 
+</details>
+
 ### Step 2: Get embeddings (optional)
 
 Next, we retrieve document embeddigs from transformer models. The
@@ -190,7 +199,7 @@ emb_matrix <- coorsim::save_embeddings(tweets_df,
                                   batch_size = 16L, 
                                   max_length = 512L, 
                                   use_fp16 = T,
-                                  model_name = "sentence-transformers/paraphrase-TinyBERT-L6-v2", ## extra-small model for demostration purposes only  
+                                  model_name = "Twitter/twhin-bert-base", # "sentence-transformers/paraphrase-TinyBERT-L6-v2", 
                                   save_dir = "data/emb", 
                                   h5_fileprefix = "toy_sample_"
                                 )
@@ -210,7 +219,7 @@ sim_dt <- coorsim::detect_cosimilarity(
   data = tweets_df,
   embeddings = emb_file,
   time_window = 180, # 3 Minutes 
-  min_simil = 0.9, 
+  min_simil = 0.925, 
   min_participation = 1,
   post_id = "post_id",
   account_id = "account_id",
@@ -219,9 +228,9 @@ sim_dt <- coorsim::detect_cosimilarity(
   verbose = TRUE
 )
 #> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [3ms]
-#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [14ms]
-#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [14ms]
-#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [14ms]
+#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [15ms]
+#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [16ms]
+#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [15ms]
 
 # Clean up the embeddings directory
 if(dir.exists("data/emb")) unlink("data/emb", recursive = TRUE)
@@ -241,9 +250,9 @@ coord <- coorsim::coorsim_detect_groups(
   verbose = TRUE
 )
 #> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [8ms]
-#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [9ms]
-#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [35ms]
-#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [8ms]
+#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [8ms]
+#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [37ms]
+#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [7ms]
 #> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [6ms]   
 ```
 
