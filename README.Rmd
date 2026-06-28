@@ -171,13 +171,10 @@ users_df <- as.data.table(users_df)
 
 </details>
 
-### Step 2: Get embeddings (optional)
+### Step 2: Get embeddings
 
 Next, we retrieve document embeddigs from transformer models.
 The function automatically installs and sets up a conda environment with the necessary libraries, if not yet present.
-
-This step can also be skipped -- In that case, the detect_cosimilarity() function uses word-frequecies
-to compute similarites.
 
 ```{r, eval=T}
 # Install/initialize conda environment to run embedding model
@@ -204,7 +201,7 @@ emb_matrix <- coorsim::save_embeddings(tweets_df,
 
 
 ### Step 3: Detect Co-Similar Posts
-Run co-similarity detection on posts within a 180-second timeframe and a cosine similarity threshold of 0.9.
+Run co-similarity detection on posts within a 180-second timeframe and a cosine similarity threshold of 0.925.
 
 ```{r similarity, eval=T}
 # Get embedding file path
@@ -230,7 +227,7 @@ if(dir.exists("data/emb")) unlink("data/emb", recursive = TRUE)
 
 ### Step 4: Detect Communities
 
-Aggregate the coordinated patterns on account level, create a network, and identify communities of accounts using 'louvain' clustering:
+Next we aggregate the observations of coordinated posting behavior on account level. We create a network, where the nodes are accounts and the edge weight is defined by the number of coordinated posting events. Finally, we identify communities of accounts using 'louvain' clustering:
 
 ```{r communities, eval=T}
 # Detect groups of accounts
@@ -245,6 +242,8 @@ coord <- coorsim::coorsim_detect_groups(
 
 ### Step 5: Plot Network 
 
+The package provides also a function to plot communities:
+
 ```{r, eval=T}
 p1 <- coorsim::plot_communities(coord)
 p1
@@ -253,20 +252,19 @@ p1
 ### Step 5: Sample Texts for Labeling Users and Communities
 Sample post content and metadata to generate concise community labels.
 
-```{r labelling_prep, eval=F}
+```{r labelling_prep, eval=T}
 
 # Sampe users and posts
 coord <- coorsim::sample_user_text( 
   groups_data = coord, 
-  sampling_ratio_posts = 1, ## here: use all posts
-  sampling_ratio_users = 1) ## use all users 
+  sampling_ratio_posts = .5, 
+  sampling_ratio_users = .5) ## use all users 
 
 ```
 
 ### Step 6: Label Communities
 Use a language model to generate labels for each identified community
-```{r labelling, eval=F}
-
+```{r labelling, eval=T}
 # Generate user descriptions, using llama3.1:8b
 coord <- coorsim::label_users(coord)
 
@@ -276,7 +274,7 @@ coord <- coorsim::label_communities(coord, model = "llama3.1:8b")
 ```
 
 ### Step 6: Visualize Community Network
-```{r plots, eval=F}
+```{r plots, eval=T}
 # Plot Communities
 p2 <- coorsim::plot_communities(coord)
 p2
