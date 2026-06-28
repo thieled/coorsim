@@ -211,7 +211,7 @@ emb_file <- list.files(path = "data/emb", pattern = ".h5$", full.names = T)[1]
 sim_dt <- coorsim::detect_cosimilarity(
   data = tweets_df,
   embeddings = emb_file,
-  time_window = 180, # 3 Minutes 
+  time_window = 600, # 10 Minutes 
   min_simil = 0.925, 
   min_participation = 1,
   post_id = "post_id",
@@ -235,7 +235,10 @@ coord <- coorsim::coorsim_detect_groups(
   simdt = sim_dt,
   user_data = users_df,
   account_id = "account_id",
-  verbose = TRUE
+  verbose = TRUE, 
+  cluster_method = "louvain", 
+  resolution = 1, 
+  theta = NULL
 )
 
 ```
@@ -258,23 +261,24 @@ Sample post content and metadata to generate concise community labels.
 coord <- coorsim::sample_user_text( 
   groups_data = coord, 
   sampling_ratio_posts = .25,  # 25% of the post of that user
-  sampling_ratio_users = .25)  # 25% of the users of a community
+  sampling_ratio_users = .5, # 50% of the users of a community
+  min_n_users = 2)  
 
 ```
 
 ### Step 6: Label Communities
 Use a language model to generate labels for each identified community
-```{r labelling, eval=T}
+```{r labelling, eval=F}
 # Generate user descriptions
-coord <- coorsim::label_users(coord, model = "llama3.2:3b-instruct-q8_0") # small model for readme only
+coord <- coorsim::label_users(coord, model = "llama3.1:8b") # small model for readme only
 
 # Generate community labels
-coord <- coorsim::label_communities(coord, model = "llama3.2:3b-instruct-q8_0")
+coord <- coorsim::label_communities(coord, model = "llama3.1:8b")
 
 ```
 
 ### Step 6: Visualize Community Network
-```{r plot-2, eval=T, fig.width=12, fig.height=8, dpi=300}
+```{r plot-2, eval=F, fig.width=12, fig.height=8, dpi=300}
 # Plot Communities
 p2 <- coorsim::plot_communities(coord)
 p2

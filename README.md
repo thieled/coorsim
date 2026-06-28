@@ -215,7 +215,7 @@ emb_file <- list.files(path = "data/emb", pattern = ".h5$", full.names = T)[1]
 sim_dt <- coorsim::detect_cosimilarity(
   data = tweets_df,
   embeddings = emb_file,
-  time_window = 180, # 3 Minutes 
+  time_window = 600, # 10 Minutes 
   min_simil = 0.925, 
   min_participation = 1,
   post_id = "post_id",
@@ -224,10 +224,10 @@ sim_dt <- coorsim::detect_cosimilarity(
   content = "content",
   verbose = TRUE
 )
-#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [4ms]
-#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [15ms]
-#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [16ms]
-#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [18ms]
+#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [3ms]
+#> ℹ [2/4]: Matching posts published within 600s.✔ [2/4]: Matched posts published within 600s. [15ms]
+#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [18ms]
+#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [16ms]
 
 # Clean up the embeddings directory
 if(dir.exists("data/emb")) unlink("data/emb", recursive = TRUE)
@@ -246,13 +246,16 @@ coord <- coorsim::coorsim_detect_groups(
   simdt = sim_dt,
   user_data = users_df,
   account_id = "account_id",
-  verbose = TRUE
+  verbose = TRUE, 
+  cluster_method = "louvain", 
+  resolution = 1, 
+  theta = NULL
 )
 #> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [9ms]
-#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [12ms]
-#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [43ms]
-#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [8ms]
-#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [6ms]   
+#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [10ms]
+#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [39ms]
+#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [10ms]
+#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [7ms]   
 ```
 
 ### Step 5: Plot Network
@@ -278,7 +281,8 @@ Sample post content and metadata to generate concise community labels.
 coord <- coorsim::sample_user_text( 
   groups_data = coord, 
   sampling_ratio_posts = .25,  # 25% of the post of that user
-  sampling_ratio_users = .25)  # 25% of the users of a community
+  sampling_ratio_users = .5, # 50% of the users of a community
+  min_n_users = 2)  
 ```
 
 ### Step 6: Label Communities
@@ -287,24 +291,10 @@ Use a language model to generate labels for each identified community
 
 ``` r
 # Generate user descriptions
-coord <- coorsim::label_users(coord, model = "llama3.2:3b-instruct-q8_0") # small model for readme only
-#> ▶ Ollama (v0.12.6) is running at <http://localhost:11434>!
-#> Retry round 0. Querying 3 users...
-#> ⠙ llama3.2:3b-instruct-q8_0 is thinking about 3/3 questions[ETA: ?]
-#> ⠹ llama3.2:3b-instruct-q8_0 is thinking about 2/3 questions[ETA:  1m]
-#> ⠸ llama3.2:3b-instruct-q8_0 is thinking about 1/3 questions[ETA: 25s]
-#>                                                                      
-#> All answers parsed successfully.
+coord <- coorsim::label_users(coord, model = "llama3.1:8b") # small model for readme only
 
 # Generate community labels
-coord <- coorsim::label_communities(coord, model = "llama3.2:3b-instruct-q8_0")
-#> Returning 2 community texts to annotate.
-#> ▶ Ollama (v0.12.6) is running at <http://localhost:11434>!
-#> Retry round 0. Querying 2 communities...
-#> ⠙ llama3.2:3b-instruct-q8_0 is thinking about 2/2 questions[ETA: ?]
-#> ⠹ llama3.2:3b-instruct-q8_0 is thinking about 1/2 questions[ETA: 29s]
-#>                                                                      
-#> All answers parsed successfully.
+coord <- coorsim::label_communities(coord, model = "llama3.1:8b")
 ```
 
 ### Step 6: Visualize Community Network
@@ -313,8 +303,4 @@ coord <- coorsim::label_communities(coord, model = "llama3.2:3b-instruct-q8_0")
 # Plot Communities
 p2 <- coorsim::plot_communities(coord)
 p2
-#> Warning: annotation$theme is not a valid theme.
-#> Please use `theme()` to construct themes.
 ```
-
-<img src="man/figures/README-plot-2-1.png" width="100%" />
