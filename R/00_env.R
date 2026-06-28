@@ -58,8 +58,7 @@ initialize_coorsim <- function(gpu = check_gpu(),
   reticulate::py_require(
     c(
       "transformers",
-      "numpy",
-      "functools"
+      "numpy"
     )
   )
 
