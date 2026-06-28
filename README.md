@@ -202,10 +202,13 @@ Run co-similarity detection on posts within a 180-second timeframe and a
 cosine similarity threshold of 0.9.
 
 ``` r
+# Get embedding file path
+emb_file <- list.files(path = "data/emb", pattern = ".h5$", full.names = T)[1]
+
 # Detect Posting similarites
 sim_dt <- coorsim::detect_cosimilarity(
   data = tweets_df,
-  embeddings = "data/emb/toy_sample_twhin-bert-base.h5",
+  embeddings = emb_file,
   time_window = 180, # 3 Minutes 
   min_simil = 0.9, 
   min_participation = 1,
@@ -215,10 +218,13 @@ sim_dt <- coorsim::detect_cosimilarity(
   content = "content",
   verbose = TRUE
 )
-#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [4ms]
-#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [18ms]
-#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [18ms]
-#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [25ms]
+#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [3ms]
+#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [14ms]
+#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [14ms]
+#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [14ms]
+
+# Clean up the embeddings directory
+if(dir.exists("data/emb")) unlink("data/emb", recursive = TRUE)
 ```
 
 ### Step 4: Detect Communities
@@ -227,18 +233,18 @@ Aggregate the coordinated patterns on account level, create a network,
 and identify communities of accounts using ‘louvain’ clustering:
 
 ``` r
-
+# Detect groups of accounts
 coord <- coorsim::coorsim_detect_groups(
   simdt = sim_dt,
   user_data = users_df,
   account_id = "account_id",
   verbose = TRUE
 )
-#> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [12ms]
-#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [10ms]
-#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [154ms]
+#> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [8ms]
+#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [9ms]
+#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [35ms]
 #> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [8ms]
-#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [7ms]   
+#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [6ms]   
 ```
 
 ### Step 5: Plot Network

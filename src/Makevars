@@ -15,8 +15,8 @@
 #CXX_STD = CXX11
 
 # Try to detect TBB using pkg-config first, fall back to system paths
-TBB_CFLAGS := $(shell pkg-config --cflags tbb 2>/dev/null)
-TBB_LIBS := $(shell pkg-config --libs tbb 2>/dev/null)
+TBB_CFLAGS = $(shell pkg-config --cflags tbb 2>/dev/null)
+TBB_LIBS = $(shell pkg-config --libs tbb 2>/dev/null)
 
 # If pkg-config fails, use standard system locations
 ifeq ($(TBB_CFLAGS),)

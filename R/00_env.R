@@ -83,9 +83,20 @@ initialize_coorsim <- function(gpu = check_gpu(),
   invisible(TRUE)
 }
 
-#' CUDA-detection only, just for onnxruntime-gpu
-#' @keywords internal
-#' @noRd
+
+#' Check GPU Availability
+#'
+#' Detects whether an NVIDIA GPU is available on the system.
+#'
+#' @return Logical. \code{TRUE} if a GPU is detected, \code{FALSE} otherwise.
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   check_gpu()
+#' }
+#'
 check_gpu <- function() {
   if (!is.null(.env$gpu_info)) {
     return(.env$gpu_info$n > 0)
