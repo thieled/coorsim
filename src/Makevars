@@ -1,4 +1,3 @@
-
 ## With R 3.1.0 or later, you can uncomment the following line to tell R to
 ## enable compilation with C++11 (where available)
 ##
@@ -15,6 +14,18 @@
 ## set the appropriate value, possibly CXX17.
 #CXX_STD = CXX11
 
-# Set include paths and flags for TBB
-PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -I/path/to/tbb/include
-PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) -L/path/to/tbb/lib -ltbb
+# Try to detect TBB using pkg-config first, fall back to system paths
+TBB_CFLAGS := $(shell pkg-config --cflags tbb 2>/dev/null)
+TBB_LIBS := $(shell pkg-config --libs tbb 2>/dev/null)
+
+# If pkg-config fails, use standard system locations
+ifeq ($(TBB_CFLAGS),)
+  TBB_CFLAGS = -I/usr/include
+endif
+
+ifeq ($(TBB_LIBS),)
+  TBB_LIBS = -L/usr/lib -L/usr/lib/x86_64-linux-gnu -ltbb
+endif
+
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) $(TBB_CFLAGS)
+PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) $(TBB_LIBS)
