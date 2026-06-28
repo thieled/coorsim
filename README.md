@@ -224,10 +224,10 @@ sim_dt <- coorsim::detect_cosimilarity(
   content = "content",
   verbose = TRUE
 )
-#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [3ms]
-#> ℹ [2/4]: Matching posts published within 600s.✔ [2/4]: Matched posts published within 600s. [15ms]
-#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [18ms]
-#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [16ms]
+#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [2ms]
+#> ℹ [2/4]: Matching posts published within 600s.✔ [2/4]: Matched posts published within 600s. [14ms]
+#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [20ms]
+#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [15ms]
 
 # Clean up the embeddings directory
 if(dir.exists("data/emb")) unlink("data/emb", recursive = TRUE)
@@ -248,14 +248,15 @@ coord <- coorsim::coorsim_detect_groups(
   account_id = "account_id",
   verbose = TRUE, 
   cluster_method = "louvain", 
-  resolution = 1, 
+  resolution = .7, 
+  edge_weight = 2,
   theta = NULL
 )
-#> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [9ms]
-#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [10ms]
-#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [39ms]
-#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [10ms]
-#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [7ms]   
+#> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [8ms]
+#> ℹ [2/5]: Create edge list.Filter by edge_weight >= 2.✔ [2/5]: Created edge list. [15ms]
+#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [34ms]
+#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [7ms]
+#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [6ms]   
 ```
 
 ### Step 5: Plot Network
@@ -263,7 +264,7 @@ coord <- coorsim::coorsim_detect_groups(
 The package provides also a function to plot communities:
 
 ``` r
-p1 <- coorsim::plot_communities(coord)
+p1 <- coorsim::plot_communities(coord, start_color = .2, end_color = .8)
 p1
 #> Warning: annotation$theme is not a valid theme.
 #> Please use `theme()` to construct themes.

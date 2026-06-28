@@ -237,7 +237,8 @@ coord <- coorsim::coorsim_detect_groups(
   account_id = "account_id",
   verbose = TRUE, 
   cluster_method = "louvain", 
-  resolution = 1, 
+  resolution = .7, 
+  edge_weight = 2,
   theta = NULL
 )
 
@@ -248,7 +249,7 @@ coord <- coorsim::coorsim_detect_groups(
 The package provides also a function to plot communities:
 
 ```{r plot-1, eval=T, fig.width=12, fig.height=8, dpi=300}
-p1 <- coorsim::plot_communities(coord)
+p1 <- coorsim::plot_communities(coord, start_color = .2, end_color = .8)
 p1
 ```
 
