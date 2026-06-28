@@ -4,6 +4,10 @@
 # coorsim <img src="man/figures/logo.png" align="right" height="134" alt="" />
 
 <!-- badges: start -->
+
+[![R-CMD-check](https://github.com/thieled/coorsim/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/thieled/coorsim/actions/workflows/R-CMD-check.yaml)
+[![Codecov test
+coverage](https://codecov.io/gh/thieled/coorsim/graph/badge.svg)](https://app.codecov.io/gh/thieled/coorsim)
 <!-- badges: end -->
 
 The coorsim R package is designed to detect and analyze coordinated
@@ -20,17 +24,8 @@ You can install the development version of coorsim from
 [GitHub](https://github.com/) with:
 
 ``` r
-# install.packages("devtools")
-devtools::install_github("thieled/coorsim")
-```
-
-If the ‘rhdf5’ library is causing error, please first run:
-
-``` r
-if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-BiocManager::install("rhdf5")
-
-devtools::install_github("thieled/coorsim")
+# install.packages("pak")
+pak::pak("thieled/coorsim")
 ```
 
 ## Example
@@ -38,14 +33,136 @@ devtools::install_github("thieled/coorsim")
 Below is an example of how to use coorsim to detect and analyze
 coordinated behavior in a set of Twitter data.
 
-### Step 1: Load Data
+### Step 1: Create Toy Data
 
-Prepare data with tweets containing posts and users with user metadata.
-Ensure a matrix of post embeddings is also available.
+First, we create a toy dataset: 100 Tweets by 10 users. 5 out of the 10
+users engage in ‘coordinated posting behavior’ and spread climate
+denialist content. The others also talk about other climate issues but
+are non-coordinated.
 
 ``` r
-posts <- readRDS("/path/to/file")
-users <- readRDS("/path/to/user_file")
+
+library(data.table)
+
+set.seed(123)
+
+# Define time parameters
+start_time <- as.POSIXct("2024-01-15 09:00:00", tz = "UTC")
+end_time <- as.POSIXct("2024-01-15 12:00:00", tz = "UTC")  # Explicitly set end time
+
+# Create 10 accounts (5 coordinated, 5 normal)
+coordinated_accounts <- paste0("coord_", 1:5)
+normal_accounts <- paste0("normal_", 1:5)
+all_accounts <- c(coordinated_accounts, normal_accounts)
+
+# Create users_df
+users_df <- data.frame(
+  account_id = all_accounts,
+  account_name = c(
+    "ClimateSkeptic1", "TruthSeeker99", "ScienceDebunker", 
+    "FreedomFirst", "RealFacts2024",
+    "EcoWarrior", "GreenFuture", "ClimateActionNow", 
+    "SustainableLiving", "PlanetProtector"
+  ),
+  followers = sample(100:10000, 10),
+  verified = sample(c(TRUE, FALSE), 10, replace = TRUE)
+)
+
+# Climate denial messages (coordinated behavior)
+denial_templates <- list(
+  list("Climate change is a hoax perpetrated by global elites",
+       "The so-called climate crisis is manufactured by those in power",
+       "Climate change claims are exaggerated by the establishment"),
+  
+  list("No real evidence supports human-caused warming",
+       "There's insufficient proof that humans cause climate change",
+       "Scientific evidence for anthropogenic warming is lacking"),
+  
+  list("Natural cycles explain all temperature variations we see",
+       "Earth's climate has always changed through natural processes",
+       "Temperature fluctuations are part of natural climate cycles"),
+  
+  list("CO2 is plant food, not a pollutant harming our planet",
+       "Carbon dioxide benefits plants and isn't dangerous",
+       "Higher CO2 levels are good for vegetation growth")
+)
+
+# Other climate topics (normal behavior)
+other_topics <- c(
+  "Just installed solar panels on my roof! #renewableenergy",
+  "New study shows Arctic ice melting faster than predicted",
+  "Electric vehicles are becoming more affordable each year",
+  "Extreme weather events are increasing in frequency globally",
+  "Local community starting a tree planting initiative",
+  "Ocean acidification threatens marine ecosystems",
+  "Wind energy now cheaper than fossil fuels in many regions",
+  "Heat waves breaking records across multiple continents",
+  "Sustainable agriculture practices can reduce emissions",
+  "Youth climate activists organizing global strike",
+  "Coral reefs dying at alarming rates due to warming",
+  "Green technology investments reaching new highs",
+  "Wildfires devastating forests due to drought conditions",
+  "Carbon capture technology showing promising results",
+  "Cities implementing bike-sharing programs",
+  "Glaciers retreating at unprecedented rates",
+  "Plant-based diets can reduce carbon footprint",
+  "Sea levels rising faster in coastal areas",
+  "Battery technology improving for energy storage",
+  "Species extinction linked to habitat loss"
+)
+
+# Generate coordinated tweets (30 tweets)
+coordinated_tweets <- list()
+tweet_id <- 1
+
+# Calculate time window in seconds
+time_window <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+# Create 6 coordinated events (each with 5 tweets within 10 minutes)
+for (event in 1:6) {
+  # Random time within the 3-hour window (leaving 10 minutes for the event)
+  event_start <- start_time + runif(1, 0, time_window - 600)
+  
+  # Pick a random denial template
+  template <- denial_templates[[sample(1:4, 1)]]
+  
+  for (i in 1:5) {
+    coordinated_tweets[[length(coordinated_tweets) + 1]] <- data.frame(
+      post_id = sprintf("tweet_%03d", tweet_id),
+      account_id = coordinated_accounts[i],
+      content = template[[sample(1:3, 1)]],
+      created_at = event_start + runif(1, 0, 600)  # Within 10 minutes
+    )
+    tweet_id <- tweet_id + 1
+  }
+}
+
+# Generate normal tweets (70 tweets)
+normal_tweets <- list()
+
+for (i in 1:70) {
+  normal_tweets[[i]] <- data.frame(
+    post_id = sprintf("tweet_%03d", tweet_id),
+    account_id = sample(all_accounts, 1),
+    content = sample(other_topics, 1),
+    created_at = start_time + runif(1, 0, time_window)
+  )
+  tweet_id <- tweet_id + 1
+}
+
+# Combine all tweets
+tweets_df <- rbind(
+  do.call(rbind, coordinated_tweets),
+  do.call(rbind, normal_tweets)
+)
+
+# Sort by time
+tweets_df <- tweets_df[order(tweets_df$created_at), ]
+rownames(tweets_df) <- NULL
+
+# Convert to data.table
+tweets_df <- as.data.table(tweets_df)
+users_df <- as.data.table(users_df)
 ```
 
 ### Step 2: Get embeddings (optional)
@@ -58,65 +175,94 @@ This step can also be skipped – In that case, the detect_cosimilarity()
 function uses word-frequecies to compute similarites.
 
 ``` r
-emb_matrix <- coorsim::get_embeddings(posts,
-                                  post_id = "tweet_id", 
+# Install/initialize conda environment to run embedding model
+coorsim::initialize_coorsim()
+
+# Create dir to store embeddings
+if(!dir.exists("data/emb")) dir.create("data/emb", recursive = T)
+
+
+# For larger datasets this works best with a CUDA GPU
+emb_matrix <- coorsim::save_embeddings(tweets_df,
+                                  post_id = "post_id", 
                                   time = "created_at",
-                                  content = "text",
+                                  content = "content",
                                   batch_size = 16L, 
                                   max_length = 512L, 
                                   use_fp16 = T,
-                                  model_name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+                                  model_name = "sentence-transformers/paraphrase-TinyBERT-L6-v2", ## extra-small model for demostration purposes only  
+                                  save_dir = "data/emb", 
+                                  h5_fileprefix = "toy_sample_"
+                                )
 ```
 
 ### Step 3: Detect Co-Similar Posts
 
-Run co-similarity detection on posts within a 60-second timeframe and a
+Run co-similarity detection on posts within a 180-second timeframe and a
 cosine similarity threshold of 0.9.
 
 ``` r
+# Detect Posting similarites
 sim_dt <- coorsim::detect_cosimilarity(
-  data = posts,
-  embeddings = post_embedding_matrix,
-  time_window = 60,
-  min_simil = 0.9,
+  data = tweets_df,
+  embeddings = "data/emb/toy_sample_twhin-bert-base.h5",
+  time_window = 180, # 3 Minutes 
+  min_simil = 0.9, 
   min_participation = 1,
-  post_id = "tweet_id",
-  account_id = "user_id",
+  post_id = "post_id",
+  account_id = "account_id",
   time = "created_at",
-  content = "text",
+  content = "content",
   verbose = TRUE
 )
+#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [4ms]
+#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [18ms]
+#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [18ms]
+#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [25ms]
 ```
 
 ### Step 4: Detect Communities
 
-\[ NOTE: Package is under development from here on … \]
-
-Identify communities of accounts using the FSA_V method to reveal groups
-with coordinated posting behavior.
+Aggregate the coordinated patterns on account level, create a network,
+and identify communities of accounts using ‘louvain’ clustering:
 
 ``` r
-comm_dt <- coorsim::coorsim_detect_groups(
+
+coord <- coorsim::coorsim_detect_groups(
   simdt = sim_dt,
-  user_data = users,
-  cluster_method = "FSA_V",
-  account_id = "user_id",
-  theta = 0.7,
+  user_data = users_df,
+  account_id = "account_id",
   verbose = TRUE
 )
+#> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [12ms]
+#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [10ms]
+#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [154ms]
+#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [8ms]
+#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [7ms]   
 ```
 
-### Step 5: Prepare for Community Labeling
+### Step 5: Plot Network
+
+``` r
+p1 <- coorsim::plot_communities(coord)
+p1
+#> Warning: annotation$theme is not a valid theme.
+#> Please use `theme()` to construct themes.
+```
+
+<img src="man/figures/README-unnamed-chunk-4-1.png" width="100%" />
+
+### Step 5: Sample Texts for Labeling Users and Communities
 
 Sample post content and metadata to generate concise community labels.
 
 ``` r
-comm_dt <- coorsim::prepare_community_texts(
-  groups_data = comm_dt,
-  sample_n = 5,
-  min_n_char = 10,
-  verbose = TRUE
-)
+
+# Sampe users and posts
+coord <- coorsim::sample_user_text( 
+  groups_data = coord, 
+  sampling_ratio_posts = 1, ## here: use all posts
+  sampling_ratio_users = 1) ## use all users 
 ```
 
 ### Step 6: Label Communities
@@ -124,19 +270,18 @@ comm_dt <- coorsim::prepare_community_texts(
 Use a language model to generate labels for each identified community
 
 ``` r
-instruction <- "Generate a concise label in English and a one-sentence description that summarizes the themes, tone, and regional focus of this community of Twitter users. The account names, locations, short bios, and sampled posts are provided below. Use '[LABEL:]' for the label and '[DESCRIPTION:]' for the description. Provide no additional output."
 
-label_res <- coorsim::label_communities(
-  groups_data = comm_dt,
-  instruction = instruction,
-  llm = "llama3.1:8b",
-  retries = 3
-)
+# Generate user descriptions, using llama3.1:8b
+coord <- coorsim::label_users(coord)
+
+# Generate community labels, using llama3.1:8b 
+coord <- coorsim::label_communities(coord, model = "llama3.1:8b")
 ```
 
 ### Step 6: Visualize Community Network
 
 ``` r
-p1 <- coorsim::plot_communities(network_data = label_res, component_size_threshold = 3)
-p2 <- coorsim::plot_coordinated_posts(network_data = label_res, by_community = TRUE)
+# Plot Communities
+p2 <- coorsim::plot_communities(coord)
+p2
 ```
