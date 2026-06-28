@@ -14,13 +14,9 @@ get_embeddings(
   max_length = 512L,
   use_fp16 = TRUE,
   trust_remote_code = TRUE,
-  python_version = "3.13",
-  conda_path = NULL,
-  conda_env_path = NULL,
-  conda_env_name = "conda-coorsim",
-  ask = TRUE,
-  force = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  uv_cache_dir = NULL,
+  models_dir = NULL
 )
 }
 \arguments{
@@ -50,25 +46,11 @@ Other useful, more complex models to consider are, e.g.:
 
 \item{trust_remote_code}{Logical, whether to trust remote code from huggingface or not (default is TRUE). Necessary for Alibaba gte.}
 
-\item{python_version}{Character. The Python version to install in the Conda environment.
-Defaults to `"3.13"`.}
-
-\item{conda_path}{Character. The path where Miniconda should be installed.
-If `NULL`, Miniconda is installed in the default location.}
-
-\item{conda_env_path}{Character. The path where the Conda environment should be created.
-If `NULL`, the environment is created in the default Conda environments directory.}
-
-\item{conda_env_name}{Character. The name of the Conda environment to create or use.
-Defaults to `"conda-coorsim"`.}
-
-\item{ask}{Logical. If `TRUE`, prompts the user for confirmation before installing Miniconda.
-Defaults to `TRUE`.}
-
-\item{force}{Logical. If `TRUE`, forces reinstallation of dependencies even if they are already installed.
-Defaults to `TRUE`.}
-
 \item{verbose}{Logical. If `TRUE`, prints progress messages.}
+
+\item{uv_cache_dir}{Character (optional). Directory used by uv to install python libraries, passed on to initialize_coorsim.}
+
+\item{models_dir}{Character (optional).  Directory used to cache huggingface models, passed on to initialize_coorsim.}
 }
 \value{
 A matrix with rownames corresponding to the 'id' column and computed embeddings as columns.

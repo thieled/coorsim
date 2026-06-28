@@ -126,3 +126,5 @@ utils::globalVariables(c(".",
 
 
 .datatable.aware <- TRUE
+
+.env <- new.env()

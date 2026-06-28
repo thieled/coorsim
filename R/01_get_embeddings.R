@@ -17,19 +17,9 @@
 #' @param max_length Integer. Maximum sequence length for tokenization (default is 512L).
 #' @param use_fp16 Logical, whether to use fp16 precision on GPU if available (default is FALSE).
 #' @param trust_remote_code Logical, whether to trust remote code from huggingface or not (default is TRUE). Necessary for Alibaba gte.
-#' @param python_version Character. The Python version to install in the Conda environment.
-#' Defaults to `"3.13"`.
-#' @param conda_path Character. The path where Miniconda should be installed.
-#' If `NULL`, Miniconda is installed in the default location.
-#' @param conda_env_path Character. The path where the Conda environment should be created.
-#' If `NULL`, the environment is created in the default Conda environments directory.
-#' @param conda_env_name Character. The name of the Conda environment to create or use.
-#' Defaults to `"conda-coorsim"`.
-#' @param ask Logical. If `TRUE`, prompts the user for confirmation before installing Miniconda.
-#' Defaults to `TRUE`.
-#' @param force Logical. If `TRUE`, forces reinstallation of dependencies even if they are already installed.
-#' Defaults to `TRUE`.
 #' @param verbose Logical. If `TRUE`, prints progress messages.
+#' @param uv_cache_dir Character (optional). Directory used by uv to install python libraries, passed on to initialize_coorsim.
+#' @param models_dir Character (optional).  Directory used to cache huggingface models, passed on to initialize_coorsim.
 #'
 #' @return A matrix with rownames corresponding to the 'id' column and computed embeddings as columns.
 #' @export
@@ -42,14 +32,9 @@ get_embeddings <- function(data,
                            max_length = 512L, 
                            use_fp16 = TRUE,
                            trust_remote_code = TRUE,
-                           python_version = "3.13",
-                           conda_path = NULL,
-                           conda_env_path = NULL,
-                           conda_env_name = "conda-coorsim",
-                           ask = TRUE,
-                           force = FALSE,
-                           verbose = TRUE
-                           
+                           verbose = TRUE,
+                           uv_cache_dir = NULL,        
+                           models_dir = NULL
                            ) {
   
   # Assert that data is data frame or table
@@ -102,21 +87,10 @@ get_embeddings <- function(data,
   # Sort by time
   data <- data[order(time)]
   
-  
-  # Check if conda-coorsim is initialized
-  if (is.null(options("conda_coorsim_initialized")$conda_coorsim_initialized)){
+  # Initialize coorsim
+  initialize_coorsim(uv_cache_dir = uv_cache_dir,        # Optional: custom cache directory
+                           models_dir = models_dir)
     
-    initialize_conda_coorsim(python_version =  python_version,
-                            conda_path = conda_path,
-                            conda_env_path = conda_env_path,
-                            conda_env_name = conda_env_name,
-                            ask = ask,
-                            force = force,
-                            verbose = verbose)
-    
-  }
-  
-  
   # Call the Python function with additional parameters for batch_size, max_length, and use_fp16
   embeddings <- reticulate::py$get_text_embeddings(
     texts = data$content,
@@ -168,18 +142,9 @@ get_embeddings <- function(data,
 #' @param save_dir Character. Directory where the HDF5 file will be saved. If `NULL`, defaults to the 
 #' working directory.
 #' @param overwrite Logical. Whether to overwrite an existing HDF5 file.
-#' @param python_version Character. The Python version to use when retrieving embeddings. Defaults to `"3.13"`.
-#' @param conda_path Character. The path to the Conda installation to use. If `NULL`, the function 
-#' attempts to detect an existing installation.
-#' @param conda_env_path Character. The path where the Conda environment should be created or used. 
-#' If `NULL`, the default Conda environment location is used.
-#' @param conda_env_name Character. The name of the Conda environment where embeddings will be 
-#' generated. Defaults to `"conda-coorsim"`.
-#' @param ask Logical. Whether to prompt the user for confirmation before installing Conda or dependencies.
-#' Defaults to `TRUE`.
-#' @param force Logical. If `TRUE`, forces reinstallation of dependencies even if they are already installed.
-#' Defaults to `FALSE`.
 #' @param verbose Logical. If `TRUE`, prints progress messages. Defaults to `TRUE`.
+#' @param uv_cache_dir Character (optional). Directory used by uv to install python libraries, passed on to initialize_coorsim.
+#' @param models_dir Character (optional).  Directory used to cache huggingface models, passed on to initialize_coorsim.
 #'
 #' @details
 #' The function performs the following steps:
@@ -216,17 +181,11 @@ save_embeddings <- function(data,
                             trust_remote_code = TRUE,
                             chunk_size = 512L,
                             gzip_level = NULL,
-                            
                             h5_fileprefix = "embeddings_",
                             save_dir = NULL,
                             overwrite = TRUE,
-                            
-                            python_version = "3.13",
-                            conda_path = NULL,
-                            conda_env_path = NULL,
-                            conda_env_name = "conda-coorsim",
-                            ask = TRUE,
-                            force = FALSE,
+                            uv_cache_dir = NULL, 
+                            models_dir = NULL,
                             verbose = TRUE){
   
   # Assert that data is data frame or table
@@ -289,12 +248,8 @@ save_embeddings <- function(data,
                                         max_length = max_length, 
                                         use_fp16 = use_fp16,
                                         trust_remote_code =trust_remote_code, 
-                                        python_version = python_version,
-                                        conda_path = conda_path,
-                                        conda_env_path = conda_env_path,
-                                        conda_env_name = conda_env_name,
-                                        ask = ask,
-                                        force = force,
+                                        uv_cache_dir = uv_cache_dir, 
+                                        models_dir = models_dir,
                                         verbose = verbose)
   
   # Step 2: Store embeddings as .h5 file

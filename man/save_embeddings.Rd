@@ -19,12 +19,8 @@ save_embeddings(
   h5_fileprefix = "embeddings_",
   save_dir = NULL,
   overwrite = TRUE,
-  python_version = "3.13",
-  conda_path = NULL,
-  conda_env_path = NULL,
-  conda_env_name = "conda-coorsim",
-  ask = TRUE,
-  force = FALSE,
+  uv_cache_dir = NULL,
+  models_dir = NULL,
   verbose = TRUE
 )
 }
@@ -68,22 +64,9 @@ working directory.}
 
 \item{overwrite}{Logical. Whether to overwrite an existing HDF5 file.}
 
-\item{python_version}{Character. The Python version to use when retrieving embeddings. Defaults to `"3.13"`.}
+\item{uv_cache_dir}{Character (optional). Directory used by uv to install python libraries, passed on to initialize_coorsim.}
 
-\item{conda_path}{Character. The path to the Conda installation to use. If `NULL`, the function 
-attempts to detect an existing installation.}
-
-\item{conda_env_path}{Character. The path where the Conda environment should be created or used. 
-If `NULL`, the default Conda environment location is used.}
-
-\item{conda_env_name}{Character. The name of the Conda environment where embeddings will be 
-generated. Defaults to `"conda-coorsim"`.}
-
-\item{ask}{Logical. Whether to prompt the user for confirmation before installing Conda or dependencies.
-Defaults to `TRUE`.}
-
-\item{force}{Logical. If `TRUE`, forces reinstallation of dependencies even if they are already installed.
-Defaults to `FALSE`.}
+\item{models_dir}{Character (optional).  Directory used to cache huggingface models, passed on to initialize_coorsim.}
 
 \item{verbose}{Logical. If `TRUE`, prints progress messages. Defaults to `TRUE`.}
 }
