@@ -224,10 +224,10 @@ sim_dt <- coorsim::detect_cosimilarity(
   content = "content",
   verbose = TRUE
 )
-#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [2ms]
-#> ℹ [2/4]: Matching posts published within 600s.✔ [2/4]: Matched posts published within 600s. [14ms]
-#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [20ms]
-#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [15ms]
+#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [3ms]
+#> ℹ [2/4]: Matching posts published within 600s.✔ [2/4]: Matched posts published within 600s. [28ms]
+#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [40ms]
+#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [33ms]
 
 # Clean up the embeddings directory
 if(dir.exists("data/emb")) unlink("data/emb", recursive = TRUE)
@@ -252,11 +252,11 @@ coord <- coorsim::coorsim_detect_groups(
   edge_weight = 2,
   theta = NULL
 )
-#> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [8ms]
-#> ℹ [2/5]: Create edge list.Filter by edge_weight >= 2.✔ [2/5]: Created edge list. [15ms]
-#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [34ms]
-#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [7ms]
-#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [6ms]   
+#> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [18ms]
+#> ℹ [2/5]: Create edge list.Filter by edge_weight >= 2.✔ [2/5]: Created edge list. [29ms]
+#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [68ms]
+#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [13ms]
+#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [11ms]  
 ```
 
 ### Step 5: Plot Network
@@ -264,7 +264,7 @@ coord <- coorsim::coorsim_detect_groups(
 The package provides also a function to plot communities:
 
 ``` r
-p1 <- coorsim::plot_communities(coord, start_color = .2, end_color = .8)
+p1 <- coorsim::plot_communities(coord, palette_option = "D", start_color = .2, end_color = .8)
 p1
 #> Warning: annotation$theme is not a valid theme.
 #> Please use `theme()` to construct themes.
@@ -274,7 +274,8 @@ p1
 
 ### Step 5: Sample Texts for Labeling Users and Communities
 
-Sample post content and metadata to generate concise community labels.
+The function `sample_user_text` samples users from communities and posts
+from users which are them passed on to a local llm-labelling function.
 
 ``` r
 
@@ -288,20 +289,53 @@ coord <- coorsim::sample_user_text(
 
 ### Step 6: Label Communities
 
-Use a language model to generate labels for each identified community
+The labelling functions `label_users` and `label_communities` run local
+LLMs via `'ollama'` and
+[‘rollama’](https://github.com/JBGruber/rollama/) – this requires that
+the user has ollama runnign via Docker in the background. The prompts
+have been carefully engineered and validated in a LLM-as-a-Judge
+pipeline.
 
 ``` r
 # Generate user descriptions
 coord <- coorsim::label_users(coord, model = "llama3.1:8b") # small model for readme only
+#> ▶ Ollama (v0.12.6) is running at <http://localhost:11434>!
+#> Retry round 0. Querying 6 users...
+#> ⠙ llama3.1:8b is thinking about 6/6 questions[ETA: ?]
+#> ⠹ llama3.1:8b is thinking about 6/6 questions[ETA: ?]
+#> ⠸ llama3.1:8b is thinking about 5/6 questions[ETA:  3m]
+#> ⠼ llama3.1:8b is thinking about 4/6 questions[ETA:  2m]
+#> ⠴ llama3.1:8b is thinking about 3/6 questions[ETA:  2m]
+#> ⠦ llama3.1:8b is thinking about 2/6 questions[ETA:  1m]
+#> ⠧ llama3.1:8b is thinking about 1/6 questions[ETA: 34s]
+#>                                                        
+#> All answers parsed successfully.
 
 # Generate community labels
 coord <- coorsim::label_communities(coord, model = "llama3.1:8b")
+#> Returning 3 community texts to annotate.
+#> ▶ Ollama (v0.12.6) is running at <http://localhost:11434>!
+#> Retry round 0. Querying 3 communities...
+#> ⠙ llama3.1:8b is thinking about 3/3 questions[ETA: ?]
+#> ⠹ llama3.1:8b is thinking about 2/3 questions[ETA:  2m]
+#> ⠸ llama3.1:8b is thinking about 1/3 questions[ETA:  1m]
+#>                                                        
+#> All answers parsed successfully.
 ```
 
 ### Step 6: Visualize Community Network
 
 ``` r
 # Plot Communities
-p2 <- coorsim::plot_communities(coord)
+p2 <- coorsim::plot_communities(coord, palette_option = "D", start_color = .2, end_color = .8)
 p2
+#> Warning: annotation$theme is not a valid theme.
+#> Please use `theme()` to construct themes.
 ```
+
+<img src="man/figures/README-plot-2-1.png" width="100%" />
+
+### Validity
+
+*Currently, we are working on a method paper that will extensively
+validate the detection method and labelling pipeline. Please hang on…*

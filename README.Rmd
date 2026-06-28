@@ -249,12 +249,13 @@ coord <- coorsim::coorsim_detect_groups(
 The package provides also a function to plot communities:
 
 ```{r plot-1, eval=T, fig.width=12, fig.height=8, dpi=300}
-p1 <- coorsim::plot_communities(coord, start_color = .2, end_color = .8)
+p1 <- coorsim::plot_communities(coord, palette_option = "D", start_color = .2, end_color = .8)
 p1
 ```
 
 ### Step 5: Sample Texts for Labeling Users and Communities
-Sample post content and metadata to generate concise community labels.
+
+The function `sample_user_text` samples users from communities and posts from users which are them passed on to a local llm-labelling function.
 
 ```{r labelling_prep, eval=T}
 
@@ -268,8 +269,10 @@ coord <- coorsim::sample_user_text(
 ```
 
 ### Step 6: Label Communities
-Use a language model to generate labels for each identified community
-```{r labelling, eval=F}
+
+The labelling functions `label_users` and `label_communities` run local LLMs via `'ollama'` and ['rollama'](https://github.com/JBGruber/rollama/) -- this requires that the user has ollama runnign via Docker in the background. The prompts have been carefully engineered and validated in a LLM-as-a-Judge pipeline. 
+
+```{r labelling, eval=T}
 # Generate user descriptions
 coord <- coorsim::label_users(coord, model = "llama3.1:8b") # small model for readme only
 
@@ -279,9 +282,12 @@ coord <- coorsim::label_communities(coord, model = "llama3.1:8b")
 ```
 
 ### Step 6: Visualize Community Network
-```{r plot-2, eval=F, fig.width=12, fig.height=8, dpi=300}
+```{r plot-2, eval=T, fig.width=12, fig.height=8, dpi=300}
 # Plot Communities
-p2 <- coorsim::plot_communities(coord)
+p2 <- coorsim::plot_communities(coord, palette_option = "D", start_color = .2, end_color = .8)
 p2
 ```
 
+### Validity 
+
+*Currently, we are working on a method paper that will extensively validate the detection method and labelling pipeline. Please hang on...*
