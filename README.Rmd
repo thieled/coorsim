@@ -27,11 +27,8 @@ You can install the development version of coorsim from [GitHub](https://github.
 
 ```{r, eval=F}
 # install.packages("pak")
-#pak::pak("thieled/coorsim")
-
-devtools::load_all("C:/nextcloud/Packages/coorsim")
+pak::pak("thieled/coorsim")
 ```
-
 
 ## Example
 
@@ -207,15 +204,6 @@ Run co-similarity detection on posts within a 180-second timeframe and a cosine 
 ```{r similarity, eval=T}
 # Get embedding file path
 emb_file <- list.files(path = "data/emb", pattern = ".h5$", full.names = T)[1]
-
-emb_file
-
-m <- coorsim::load_h5_embeddings(emb_file)
-
-m
-
-
-ids <- h5$open("metadata/post_id")$read()
 
 # Detect Posting similarites
 sim_dt <- coorsim::detect_cosimilarity(
