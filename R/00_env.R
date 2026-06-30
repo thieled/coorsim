@@ -84,8 +84,7 @@ initialize_coorsim <- function(gpu = check_gpu(),
 }
 
 #' CUDA-detection only, just for onnxruntime-gpu
-#' @keywords internal
-#' @noRd
+#' @export
 check_gpu <- function() {
   if (!is.null(.env$gpu_info)) {
     return(.env$gpu_info$n > 0)
