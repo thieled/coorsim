@@ -32,16 +32,9 @@ Imports:
     jsonlite,
     purrr,
     tibble
-LinkingTo: Rcpp, RcppArmadillo (>= 0.7.600.1.0), RcppParallel
-RoxygenNote: 7.3.2
-Depends:
-    R (>= 4.3.0)
-NeedsCompilation: yes
-SystemRequirements: GNU make
 Suggests: 
     emoji,
     future,
-    httr,
     ggplot2,
     ggraph, 
     ggforce,
@@ -56,8 +49,11 @@ Suggests:
     testthat (>= 3.0.0),
     tidygraph,
     viridis,
-    xgboost,
-    mltools,
     ineq
-Config/testthat/edition: 3
+LinkingTo: Rcpp, RcppArmadillo (>= 0.7.600.1.0), RcppParallel
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.3.0)
+NeedsCompilation: yes
+SystemRequirements: GNU make
 LazyData: true
