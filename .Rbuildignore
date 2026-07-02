@@ -7,3 +7,4 @@
 ^\.github$
 ^\.vscode$
 ^TBB_INSTRUCTIONS\.md$
+^TBB_MIGRATION_PLAN\.md$

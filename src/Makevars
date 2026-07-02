@@ -1,0 +1,8 @@
+## Portable TBB provisioning via RcppParallel.
+## On Linux/macOS RcppParallelLibs() prints nothing (TBB is loaded dynamically
+## by the RcppParallel package at load time); on Windows it emits the flags to
+## link RcppParallel's bundled TBB. This avoids hand-rolled -ltbb detection and
+## the ABI/PATH mismatches that caused lazy-load DB corruption and segfaults.
+PKG_CPPFLAGS = -DARMA_64BIT_WORD=1 -DTBB
+PKG_LIBS = $(shell "${R_HOME}/bin/Rscript" -e "RcppParallel::RcppParallelLibs()") \
+           $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)

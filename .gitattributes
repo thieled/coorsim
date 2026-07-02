@@ -1,5 +1,1 @@
-# Shell scripts must have Unix line endings
-configure text eol=lf
-cleanup text eol=lf
-
-configure.ac text eol=lf
+﻿# autoconf build files removed; TBB is now provisioned via RcppParallel

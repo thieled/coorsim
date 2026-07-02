@@ -15,8 +15,12 @@
 ## set the appropriate value, possibly CXX17.
 #CXX_STD = CXX11
 
-# Set include paths and flags for TBB
-PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) `$(R_HOME)/bin$(R_ARCH_BIN)/Rscript.exe ../inst/libtbb.R` -fstack-protector
-PKG_CXXFLAGS = -DARMA_64BIT_WORD=1 -DTBB
+## Portable TBB provisioning via RcppParallel (Windows).
+## RcppParallel::RcppParallelLibs() emits the flags needed to link the bundled
+## TBB (tbb12) shipped with RcppParallel, so no external libtbb/tbb12.dll on
+## PATH is required at load time.
+PKG_CPPFLAGS = -DARMA_64BIT_WORD=1 -DTBB
+PKG_LIBS = $(shell "${R_HOME}/bin/Rscript" -e "RcppParallel::RcppParallelLibs()") \
+           $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
 
