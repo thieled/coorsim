@@ -70,7 +70,7 @@ z_standardize <- function(x) {
 #' Replace Emojis with Descriptive Names
 #'
 #' Replaces emoji characters in a character vector with their corresponding
-#' descriptive names in `:colon_syntax:` (e.g., "🔥" becomes ":fire:").
+#' descriptive names in `:colon_syntax:` (e.g., fire emoji becomes ":fire:").
 #' Only emojis present in the input are processed to maximize performance.
 #'
 #' @param text_vec A character vector containing text with emojis to be replaced.
