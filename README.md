@@ -7,6 +7,7 @@
 
 [![Codecov test
 coverage](https://codecov.io/gh/thieled/coorsim/graph/badge.svg)](https://app.codecov.io/gh/thieled/coorsim)
+[![R-CMD-check](https://github.com/thieled/coorsim/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/thieled/coorsim/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 The coorsim R package is designed to detect communities of social media
@@ -224,10 +225,10 @@ sim_dt <- coorsim::detect_cosimilarity(
   content = "content",
   verbose = TRUE,
 )
-#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [3ms]
-#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [18ms]
-#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [19ms]
-#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [15ms]
+#> ℹ [1/4]: Preprocessing.Embeddings provided by .h5 file.✔ [1/4]: Preprocessing. [4ms]
+#> ℹ [2/4]: Matching posts published within 180s.✔ [2/4]: Matched posts published within 180s. [28ms]
+#> Loading embeddings from the .h5 file.ℹ [3/4]: Querying embeddings and calculate similarities using C++.✔ [3/4]: Queried embeddings, calculated similarities using C++. [26ms]
+#> ℹ [4/4]: Filter accounts by min_participation=1✔ [4/4]: Filtered accounts by min_participation=1 [24ms]
 
 # Clean up the embeddings directory
 if(dir.exists("data/emb")) unlink("data/emb", recursive = TRUE)
@@ -249,11 +250,11 @@ coord <- coorsim::coorsim_detect_groups(
   account_id = "account_id",
   verbose = TRUE
 )
-#> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [11ms]
-#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [7ms]
-#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [47ms]
-#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [10ms]
-#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [8ms]   
+#> ℹ [1/5]: Harmonizing user data.De-duplicating 'user_data'...✔ [1/5]: Harmonized user data. [15ms]
+#> ℹ [2/5]: Create edge list.✔ [2/5]: Created edge list. [10ms]
+#> ℹ [3/5]: Create node list and graph.✔ [3/5]: Created node list and graph. [63ms]
+#> ℹ [4/5]: Finding communities.✔ [4/5]: Finding communities. [21ms]
+#> ℹ [5/5]: Merge and prepare output data.✔ [5/5]: Prepared output data. [13ms]  
 ```
 
 ### Step 5: Plot Network
@@ -300,10 +301,10 @@ coord <- coorsim::label_users(coord, model = "llama3.1:8b") # small model for re
 #> Retry round 0. Querying 5 users...
 #> ⠙ llama3.1:8b is thinking about 5/5 questions[ETA: ?]
 #> ⠹ llama3.1:8b is thinking about 5/5 questions[ETA: ?]
-#> ⠸ llama3.1:8b is thinking about 4/5 questions[ETA:  3m]
-#> ⠼ llama3.1:8b is thinking about 3/5 questions[ETA:  2m]
-#> ⠴ llama3.1:8b is thinking about 2/5 questions[ETA:  1m]
-#> ⠦ llama3.1:8b is thinking about 1/5 questions[ETA: 37s]
+#> ⠸ llama3.1:8b is thinking about 4/5 questions[ETA:  8m]
+#> ⠼ llama3.1:8b is thinking about 3/5 questions[ETA:  4m]
+#> ⠴ llama3.1:8b is thinking about 2/5 questions[ETA:  3m]
+#> ⠦ llama3.1:8b is thinking about 1/5 questions[ETA:  1m]
 #>                                                        
 #> All answers parsed successfully.
 
@@ -313,8 +314,7 @@ coord <- coorsim::label_communities(coord, model = "llama3.1:8b")
 #> ▶ Ollama (v0.12.6) is running at <http://localhost:11434>!
 #> Retry round 0. Querying 2 communities...
 #> ⠙ llama3.1:8b is thinking about 2/2 questions[ETA: ?]
-#> ⠹ llama3.1:8b is thinking about 2/2 questions[ETA: ?]
-#> ⠸ llama3.1:8b is thinking about 1/2 questions[ETA:  1m]
+#> ⠹ llama3.1:8b is thinking about 1/2 questions[ETA:  2m]
 #>                                                        
 #> All answers parsed successfully.
 ```
