@@ -17,6 +17,7 @@ knitr::opts_chunk$set(
 
 <!-- badges: start -->
 [![Codecov test coverage](https://codecov.io/gh/thieled/coorsim/graph/badge.svg)](https://app.codecov.io/gh/thieled/coorsim)
+[![R-CMD-check](https://github.com/thieled/coorsim/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/thieled/coorsim/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 The coorsim R package is designed to detect communities of social media users that engage in *coordinated posting behavior,* which can indicate manipulative efforts such as "coordinated social media manipulation" (Thiele et al. 2025). By leveraging embeddings, coorsim allows to detect *semantically* similar coordinated posting, going beyond existing tools such as 'CooRTweet' (Righetti and Balluff 2025) which is tailored to detect coordinated sharing of identical objects. This argue that this approach is relevant for identifying LLM-generated coordinated content.

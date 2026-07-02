@@ -1,4 +1,4 @@
-.Rproj.user
+﻿.Rproj.user
 .Rhistory
 .Rdata
 .httr-oauth
@@ -7,3 +7,7 @@
 .o
 .so
 .dll
+
+# R CMD check output
+*.Rcheck/
+*.tar.gz

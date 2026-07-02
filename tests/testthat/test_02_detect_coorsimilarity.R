@@ -58,3 +58,66 @@ test_that("detect_cosimilarity returns data.table with similarity values", {
   expect_true("similarity" %in% names(out))
   expect_true(nrow(out) > 0)
 })
+
+
+test_that("detect_cosimilarity with embeddings uses sequential C++ function", {
+  df <- data.frame(
+    post_id = c("p1", "p2", "p3"),
+    account_id = c("a1", "a2", "a3"),
+    time = c("2023-01-01 00:00:00", "2023-01-01 00:00:30", "2023-01-01 00:01:00"),
+    content = c("text", "text", "text")
+  )
+
+  emb <- matrix(
+    c(1, 0, 0,
+      1, 0, 0,
+      0, 1, 0),
+    nrow = 3, ncol = 3, byrow = TRUE
+  )
+  rownames(emb) <- c("p1", "p2", "p3")
+
+  out <- detect_cosimilarity(
+    data = df,
+    embeddings = emb,
+    time_window = 60,
+    min_simil = 0.1,
+    min_participation = 1,
+    verbose = FALSE,
+    parallel = FALSE
+  )
+
+  expect_true("similarity" %in% names(out))
+  expect_true(nrow(out) > 0)
+  expect_true(any(out$similarity > 0.9))
+})
+
+test_that("detect_cosimilarity with embeddings uses parallel TBB C++ function", {
+  df <- data.frame(
+    post_id = c("p1", "p2", "p3"),
+    account_id = c("a1", "a2", "a3"),
+    time = c("2023-01-01 00:00:00", "2023-01-01 00:00:30", "2023-01-01 00:01:00"),
+    content = c("text", "text", "text")
+  )
+
+  emb <- matrix(
+    c(1, 0, 0,
+      1, 0, 0,
+      0, 1, 0),
+    nrow = 3, ncol = 3, byrow = TRUE
+  )
+  rownames(emb) <- c("p1", "p2", "p3")
+
+  out <- detect_cosimilarity(
+    data = df,
+    embeddings = emb,
+    time_window = 60,
+    min_simil = 0.1,
+    min_participation = 1,
+    verbose = FALSE,
+    parallel = TRUE
+  )
+
+  expect_true("similarity" %in% names(out))
+  expect_true(nrow(out) > 0)
+  expect_true(any(out$similarity > 0.9))
+})

@@ -20,6 +20,7 @@ Imports:
     lubridate,
     Matrix,
     Rcpp (>= 1.0.12),
+    RcppParallel,
     reticulate,
     stats,
     stringr,
@@ -31,11 +32,12 @@ Imports:
     jsonlite,
     purrr,
     tibble
-LinkingTo: Rcpp, RcppArmadillo
+LinkingTo: Rcpp, RcppArmadillo (>= 0.7.600.1.0), RcppParallel
 RoxygenNote: 7.3.2
 Depends:
     R (>= 4.3.0)
 NeedsCompilation: yes
+SystemRequirements: GNU make
 Suggests: 
     emoji,
     future,

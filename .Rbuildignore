@@ -3,3 +3,8 @@
 ^README\.Rmd$
 ^data-raw$
 ^LICENSE\.md$
+^\.git$
+^\.github$
+^\.vscode$
+^TBB_INSTRUCTIONS\.md$
+^TBB_MIGRATION_PLAN\.md$

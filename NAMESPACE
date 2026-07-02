@@ -1,5 +1,6 @@
 useDynLib(coorsim, .registration=TRUE)
 importFrom(Rcpp, evalCpp)
+importFrom(RcppParallel, RcppParallelLibs)
 exportPattern("^[[:alpha:]]+")
 export(initialize_coorsim)
 export(get_embeddings)
